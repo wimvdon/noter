@@ -26,6 +26,7 @@ import be.wimvandonck.noter.logic.DatabaseSetups
 import be.wimvandonck.noter.logic.DocumentEditor
 import be.wimvandonck.noter.logic.EditResult
 import be.wimvandonck.noter.logic.NestedContent
+import be.wimvandonck.noter.logic.NotionViews
 import be.wimvandonck.noter.logic.PropertyLayouts
 import be.wimvandonck.noter.logic.QuickActions
 import kotlinx.coroutines.Job
@@ -66,6 +67,8 @@ data class NoteUiState(
     val syncing: Boolean = false,
     /** The quick actions of the note's database (#119): a button each under the properties. */
     val quickActions: List<QuickAction> = emptyList(),
+    /** The order the note's database's Notion view lists the properties in, used until the user arranges them. */
+    val viewOrder: List<String> = emptyList(),
 ) {
     /** The content can be edited: not while the note's full content is still on its way. */
     val editable: Boolean get() = nested != NestedContent.State.LOADING
@@ -118,6 +121,10 @@ class NoteViewModel(
             blocks = blocks,
             loadingContent = loading,
         )
+    }.combine(repository.views) { state, views ->
+        val sourceId = state.note?.databaseId
+        val view = sourceId?.let { NotionViews.orderingView(views[it]?.views.orEmpty(), it) }
+        state.copy(viewOrder = NotionViews.propertyNames(view, state.schema).orEmpty())
     }.combine(extras) { state, (u, r, e) ->
         state.copy(users = u, relatedPages = r, contentError = e)
     }.combine(syncStatus) { state, (pending, offline, busy) ->
@@ -136,6 +143,8 @@ class NoteViewModel(
             downloading.value = false
             // Options added in Notion (or on another phone) since show in the pickers.
             launch { repository.refreshSchemaOf(pageId) }
+            // The Notion views say in which order to list the properties.
+            launch { repository.openViewsOf(pageId) }
             when {
                 fresh != null && !editedSinceOpen -> setLoaded(fresh.blocks)
                 // Typed while the newer version was on its way: the edits go on top of it, so what

@@ -113,6 +113,8 @@
         <item quantity="other">%d linked pages</item>
     </plurals>
     <string name="cards_title">Cards</string>
+    <string name="cards_follow_notion">Follow Notion</string>
+    <string name="cards_follow_notion_hint">Cards show the properties and header image of the Notion view you are in. Turn off to choose them yourself.</string>
     <string name="card_cover">Header image</string>
     <string name="card_content">Start of the content</string>
     <string name="action_indent">Indent (put in the block above)</string>

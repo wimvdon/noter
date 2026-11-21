@@ -276,7 +276,8 @@ app apart from their package (and `R` import) lines. Copy a change to the other 
   bar, closed by a swipe down that starts at the top of its list (or on the handle), a tap beside it or Back,
   never by a scroll in its list; with the keyboard open those close the keyboard first.
 - View settings (the Tune button in a database's app bar): a bottom sheet titled "View settings" with
-  a text button "Edit views in Notion" with the external-link icon, a divider, then "Cards": switches for the header
+  a text button "Edit views in Notion" with the external-link icon, a divider, then "Cards": a "Follow Notion" switch
+  (on by default, with a line saying what it does); when it is off, switches for the header
   image and the start of the content, and filter chips for up to three properties.
 - Quick actions (a database's ⋮, or a note's ⋮ for its database, Bolt icon): a bottom sheet listing them as `ListItem`s (name, its changes as supporting
   text, a delete icon button; a tap edits), with a hint and a filled "New quick action" button. Editing is a sheet with

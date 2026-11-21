@@ -54,6 +54,8 @@ data class DatabaseUiState(
     val sourceId: String = "",
     /** What the cards show now (see PropertyLayouts.cards), for the view settings. */
     val cards: CardLayout = CardLayout(),
+    /** True while the cards follow the Notion view shown (see PropertyLayouts.followsNotion). */
+    val followNotion: Boolean = true,
     /** The data source's properties (the cards can show some). */
     val properties: List<PropertySchema> = emptyList(),
     /** Notion's web link to the database, for Open in Notion, Share and editing its views. */
@@ -126,6 +128,7 @@ class DatabaseViewModel(
         val sourceViews = views.all[id]
         val shown = listedViews(sourceViews, id)
         val viewId = NotionViews.chosen(choiceOf(settings, id), shown)
+        val viewShown = shown.firstOrNull { it.id == viewId }
         val listStatus = views.status[id]
         val resultStatus = viewId?.let { views.status["$id/$it"] }
         val members = when {
@@ -138,7 +141,12 @@ class DatabaseViewModel(
             ready = true,
             hasKey = key,
             pinnedIds = settings.pinned.toSet(),
-            propertyLayouts = PropertyLayouts.cardLayouts(settings.propertyLayouts, settings.setups + (id to setup)),
+            propertyLayouts = PropertyLayouts.cardLayouts(
+                settings.propertyLayouts,
+                settings.setups + (id to setup),
+                listOfNotNull(viewShown).associateBy { id },
+                listOfNotNull(db?.schema).associateBy { id },
+            ),
             pendingCount = pending,
             offline = offline,
             sourceMissing = id.replace("-", "") in missing,
@@ -155,7 +163,8 @@ class DatabaseViewModel(
             pinned = settings.pinnedDatabases.any { plain(it.id) == plain(pinKey(id, list)) },
             sources = list,
             sourceId = id,
-            cards = PropertyLayouts.cards(setup, settings.propertyLayouts[id]),
+            cards = PropertyLayouts.cards(setup, settings.propertyLayouts[id], viewShown, db?.schema),
+            followNotion = PropertyLayouts.followsNotion(setup, settings.propertyLayouts[id]),
             properties = db?.schema?.properties.orEmpty(),
             notionUrl = ReadOnlyBlocks.notionUrl(link ?: db?.schema?.databaseId ?: pinKey(id, list)),
             views = shown,
@@ -267,7 +276,13 @@ class DatabaseViewModel(
     /** Changes what the cards show, starting from what they show now (for every view). */
     fun editCards(transform: (CardLayout) -> CardLayout) {
         val current = state.value.cards
-        updateSetup { it.copy(cards = transform(it.cards ?: current)) }
+        updateSetup { it.copy(cards = transform(if (state.value.followNotion) current else it.cards ?: current), cardsFollowNotion = false) }
+    }
+
+    /** The cards follow the Notion view shown ([follow]), or keep what the user chooses (starting from what they show now). */
+    fun setFollowNotion(follow: Boolean) {
+        val current = state.value.cards
+        updateSetup { if (follow) it.copy(cardsFollowNotion = true) else it.copy(cards = current, cardsFollowNotion = false) }
     }
 
     /** Pins the database on Home, or unpins it. */

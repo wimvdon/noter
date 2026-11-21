@@ -602,7 +602,7 @@ fun NoteScreen(
             item(key = "__properties") {
                 if (arranging) {
                     PropertyArranger(
-                        names = note.properties.filter { it.type != "title" }.map { it.name },
+                        names = PropertyLayouts.ordered(note.properties.filter { it.type != "title" }.map { it.name }, null, state.viewOrder),
                         layout = state.layout,
                         onArrange = viewModel::arrangeProperties,
                         onDone = { arranging = false },
@@ -885,7 +885,7 @@ private fun PropertiesPanel(
     lookups: PropertyLookups,
     onChange: (NoteProperty, Boolean) -> Unit,
 ) {
-    val arranged = remember(note.properties, state.layout) { PropertyLayouts.arrange(note.properties, state.layout) }
+    val arranged = remember(note.properties, state.layout, state.viewOrder) { PropertyLayouts.arrange(note.properties, state.layout, state.viewOrder) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.padding(end = 8.dp)) {
         arranged.shown.forEach { prop ->

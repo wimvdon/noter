@@ -113,6 +113,8 @@
         <item quantity="other">%d verknüpfte Seiten</item>
     </plurals>
     <string name="cards_title">Karten</string>
+    <string name="cards_follow_notion">Notion folgen</string>
+    <string name="cards_follow_notion_hint">Karten zeigen die Eigenschaften und das Titelbild der aktuellen Notion-Ansicht. Ausschalten, um sie selbst zu wählen.</string>
     <string name="card_cover">Titelbild</string>
     <string name="card_content">Anfang des Inhalts</string>
     <string name="action_indent">Einrücken (in den Block darüber)</string>

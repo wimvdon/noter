@@ -28,6 +28,43 @@ object NotionViews {
         shown.firstOrNull { choice != null && plain(it.id) == plain(choice) }?.id ?: shown.firstOrNull()?.id
 
     /**
+     * The view each data source shows ([views]: its listed views by data source ID, [choices]: the
+     * view chosen last by data source ID), for what the cards of its notes show.
+     */
+    fun shownViews(views: Map<String, List<NotionView>>, choices: Map<String, String>): Map<String, NotionView> =
+        views.mapNotNull { (sourceId, all) ->
+            val shown = listed(all, sourceId)
+            val choice = choices[sourceId] ?: choices.entries.firstOrNull { plain(it.key) == plain(sourceId) }?.value
+            val id = chosen(choice, shown) ?: return@mapNotNull null
+            shown.firstOrNull { it.id == id }?.let { sourceId to it }
+        }.toMap()
+
+    /**
+     * The names of the properties [view] shows, in its order, without the title (null: the view's
+     * configuration isn't known). A property the data source no longer has is left out.
+     */
+    fun propertyNames(view: NotionView?, schema: DatabaseSchema?): List<String>? {
+        val visible = view?.visibleProperties ?: return null
+        schema ?: return null
+        return visible.mapNotNull { ref -> schema.properties.firstOrNull { it.id == ref || it.name == ref } }
+            .filter { it.type != "title" }
+            .map { it.name }
+            .distinct()
+    }
+
+    /**
+     * The view whose order of properties a note follows: a table view when the data source has
+     * one, else its first listed view whose configuration is known.
+     */
+    fun orderingView(views: List<NotionView>, sourceId: String): NotionView? {
+        val withConfig = listed(views, sourceId).filter { it.visibleProperties != null }
+        return withConfig.firstOrNull { it.type == "table" } ?: withConfig.firstOrNull()
+    }
+
+    /** True when [view] shows the header image on its cards. */
+    fun showsCover(view: NotionView?): Boolean = view?.cover != null
+
+    /**
      * What Notion is asked for [view]'s notes: its filter, with its quick filters that have a
      * condition when [quickFilters] (added to an "and" it already has, so it nests no deeper), and
      * its sorts. A sort names its property by name, as Notion's query asks ([schema] gives the name

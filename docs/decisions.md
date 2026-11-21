@@ -2,6 +2,22 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Cards and the order of a note's properties follow the Notion view
+
+Until now the cards showed nothing but the content unless the owner chose properties in the view
+settings, and a note listed its properties alphabetically (the API gives no order for a page's
+properties). A view's `configuration` does have them: `properties` (`property_id`, `visible`, in the
+view's order) and, for gallery and board views, `cover`. `ViewCodec` now reads both
+(`NotionView.visibleProperties`, `cover`; read leniently, older copies on the phone still load).
+Cards follow the view shown by default: its visible properties (the first three, as before) and
+its header image when the view shows covers. The view settings keep a "Follow Notion" switch
+(`DatabaseSetup.cardsFollowNotion`); turning it off starts from what the cards show and lets the
+owner choose as before. A database with cards chosen earlier counts as custom and keeps them.
+A note lists its properties as the database's table view does (else its first view with a
+known configuration) until the owner arranges them; hidden ones still show, after the listed ones.
+The title is left out of both. Rejected: more than three properties on a card (the cards are
+narrow), and copying Notion's card size and layout (not worth the settings it would need).
+
 ## 2026-11-12: The view tabs follow Notion; the view settings only set the cards
 
 Listed by database, the view tabs turned out to come in Notion's order after all, so arranging

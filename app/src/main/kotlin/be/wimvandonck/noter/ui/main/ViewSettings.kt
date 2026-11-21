@@ -34,12 +34,14 @@ import be.wimvandonck.noter.logic.PropertyLayouts
 import be.wimvandonck.noter.ui.common.NoterSheet
 
 /**
- * A database's view settings (the Tune button in its app bar): what the cards of every view show,
- * and a link to edit the views in Notion (Noter never changes them; the tabs follow Notion's order).
+ * A database's view settings (the Tune button in its app bar): whether the cards follow the Notion
+ * view shown or show what the user chooses (for every view), and a link to edit the views in Notion (Noter never changes them; the tabs follow Notion's order).
  */
 @Composable
 internal fun ViewSettingsSheet(
     cards: CardLayout,
+    followNotion: Boolean,
+    onFollowNotion: (Boolean) -> Unit,
     properties: List<PropertySchema>,
     onCards: ((CardLayout) -> CardLayout) -> Unit,
     onEditInNotion: () -> Unit,
@@ -60,10 +62,19 @@ internal fun ViewSettingsSheet(
             }
             HorizontalDivider()
             Text(stringResource(R.string.cards_title), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
-            SwitchRow(stringResource(R.string.card_cover), cards.cover) { on -> onCards { it.copy(cover = on) } }
-            SwitchRow(stringResource(R.string.card_content), cards.content) { on -> onCards { it.copy(content = on) } }
+            SwitchRow(stringResource(R.string.cards_follow_notion), followNotion, onFollowNotion)
+            if (followNotion) {
+                Text(
+                    stringResource(R.string.cards_follow_notion_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                SwitchRow(stringResource(R.string.card_cover), cards.cover) { on -> onCards { it.copy(cover = on) } }
+                SwitchRow(stringResource(R.string.card_content), cards.content) { on -> onCards { it.copy(content = on) } }
+            }
             val shown = properties.filter { it.type != "title" }
-            if (shown.isNotEmpty()) {
+            if (!followNotion && shown.isNotEmpty()) {
                 Text(stringResource(R.string.cards_properties, PropertyLayouts.MAX_ON_CARD), style = MaterialTheme.typography.bodyLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     shown.forEach { property ->

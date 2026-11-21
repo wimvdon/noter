@@ -1545,6 +1545,16 @@ class NotesRepository(
         }
     }
 
+    /**
+     * Reads the Notion views of the database note [pageId] is in (see [openViews]): their order of
+     * properties is the one its page lists them in. Nothing for a page's subpages.
+     */
+    suspend fun openViewsOf(pageId: String) {
+        val databaseId = findNote(_databases.value, resolve(pageId))?.databaseId ?: return
+        if (databaseId == PAGES || isPageNotebook(databaseId)) return
+        openViews(databaseId)
+    }
+
     /** What kind of token [key] (the stored one when null) is, and who it acts as. */
     suspend fun tokenInfo(key: String? = null): TokenInfo = withContext(Dispatchers.IO) {
         TokenCodec.parse(if (key != null) client.me(key) else client.me())

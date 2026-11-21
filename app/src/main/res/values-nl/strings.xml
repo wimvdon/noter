@@ -113,6 +113,8 @@
         <item quantity="other">%d gekoppelde pagina’s</item>
     </plurals>
     <string name="cards_title">Kaarten</string>
+    <string name="cards_follow_notion">Volg Notion</string>
+    <string name="cards_follow_notion_hint">Kaarten tonen de eigenschappen en de koptekstafbeelding van de Notion-weergave waarin je zit. Zet uit om ze zelf te kiezen.</string>
     <string name="card_cover">Omslagafbeelding</string>
     <string name="card_content">Begin van de inhoud</string>
     <string name="action_indent">Inspringen (in het blok erboven zetten)</string>
