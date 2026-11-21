@@ -12,6 +12,7 @@ import be.wimvandonck.noter.data.model.BlockType
 import be.wimvandonck.noter.data.model.CustomEmoji
 import be.wimvandonck.noter.data.model.CustomEmojisCache
 import be.wimvandonck.noter.data.model.DatabaseInfo
+import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.withoutHidden
 import be.wimvandonck.noter.data.model.DatabaseSchema
 import be.wimvandonck.noter.data.model.NoteProperty
@@ -2149,17 +2150,57 @@ class NotesRepository(
     }
 
     /**
-     * Renames database [databaseId] or changes its icon ([edit]) in Notion at once (like making a
+     * Database [databaseId] (null: asked from Notion, from [sourceId]) as Notion has it now, for
+     * Edit database (its description, lock and whether it shows inside its page), kept as
+     * [databaseInfo] keeps it. What was kept when Notion can't be reached; null when nothing is.
+     */
+    suspend fun freshDatabaseInfo(databaseId: String?, sourceId: String): DatabaseInfo? {
+        val database = databaseId ?: databaseOf(sourceId) ?: return null
+        val key = plain(database)
+        return withContext(Dispatchers.IO) {
+            val info = try {
+                WorkspaceCodec.databaseInfo(client.getDatabase(database))
+            } catch (e: NotionException) {
+                null
+            }
+            lock.withLock {
+                if (!databaseInfosRead) {
+                    databaseInfos.putAll(cache.databaseInfos())
+                    databaseInfosRead = true
+                }
+                if (info != null) {
+                    databasesAsked += key
+                    databaseInfos[key] = info
+                    cache.saveDatabaseInfos(databaseInfos.toMap())
+                }
+                info ?: databaseInfos[key]
+            }
+        }
+    }
+
+    /**
+     * The properties of data source [sourceId] (a relation's other database, for a new rollup):
+     * kept on this phone when it shows that database, else asked from Notion. Throws when Notion
+     * can't be reached or refuses.
+     */
+    suspend fun propertiesOf(sourceId: String): List<PropertySchema> {
+        _databases.value.entries.firstOrNull { plain(it.key) == plain(sourceId) }?.value?.schema?.let { return it.properties }
+        return withContext(Dispatchers.IO) { PropertyCodec.parseSchema(client.getDataSource(sourceId)).properties }
+    }
+
+    /**
+     * Changes database [databaseId] ([edit]: its name, icon, description, lock, …) in Notion at once (like making a
      * database, nothing is queued), then everywhere on this phone. [sourceId] is the data source
      * shown; when it is the database's only one ([single]) it changes too, since Notion's lists show
      * its name. [databaseId] null: asked from Notion. Throws when Notion can't be reached or refuses.
      */
     suspend fun editDatabase(databaseId: String?, sourceId: String, single: Boolean, edit: DatabaseEdit) {
+        if (edit.isEmpty) return
         val database = databaseId ?: databaseOf(sourceId) ?: throw NotionException("Database not known")
-        val body = edit.body()
+        val sourceBody = edit.sourceBody()
         withContext(Dispatchers.IO) {
-            client.updateDatabase(database, body)
-            if (single && plain(sourceId) != plain(database)) client.updateDataSource(sourceId, body)
+            client.updateDatabase(database, edit.body())
+            if (single && sourceBody.isNotEmpty() && plain(sourceId) != plain(database)) client.updateDataSource(sourceId, sourceBody)
         }
         val ids = setOf(plain(database), plain(sourceId))
         withContext(Dispatchers.IO) {

@@ -15,6 +15,11 @@ import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.logic.NotionViews
+import be.wimvandonck.noter.logic.DatabaseEdit
+import be.wimvandonck.noter.logic.EditedProperty
+import be.wimvandonck.noter.logic.PropertyKind
+import be.wimvandonck.noter.logic.PropertySettings
+import be.wimvandonck.noter.logic.SchemaEdits
 import be.wimvandonck.noter.logic.PickedFile
 import be.wimvandonck.noter.logic.SharedContent
 import be.wimvandonck.noter.logic.TemplatePick
@@ -1160,6 +1165,96 @@ class NotesRepositoryTest {
         assertEquals("/databases/db-1", patch.path)
         assertEquals("""{"parent":{"type":"workspace","workspace":true}}""", patch.body)
         assertEquals(null, repo.recent.value?.single()?.parentId)
+    }
+
+    // ---- Edit database ----
+
+    @Test
+    fun `Edit database's property changes are sent to the data source as one exact body`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list()
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                else -> 200 to FakeNotion.list()
+            }
+        }
+        val repo = repository()
+        val original = listOf(
+            PropertySchema("title", "Name", "title"),
+            PropertySchema("a1", "Tags", "multi_select"),
+            PropertySchema("n1", "Price", "number", numberFormat = "number"),
+            PropertySchema("r1", "Authors", "relation", relationDatabaseId = "ds-authors"),
+        )
+        val start = SchemaEdits.start(original)
+        val edited = start.map {
+            when (it.id) {
+                "a1" -> SchemaEdits.changeType(it, PropertyKind.SELECT).copy(name = "Genre")
+                "n1" -> it.copy(settings = it.settings.copy(numberFormat = "euro"))
+                else -> it
+            }
+        } + listOf(
+            EditedProperty(null, "Double", "formula", PropertyKind.FORMULA, settings = PropertySettings(formula = "prop(\"Price\") * 2")),
+            EditedProperty(null, "Shelf", "relation", PropertyKind.RELATION, settings = PropertySettings(relationTarget = "ds-shelves", twoWay = true)),
+            EditedProperty(null, "Pages", "rollup", PropertyKind.ROLLUP, settings = PropertySettings(rollupRelation = "r1", rollupProperty = "p9", rollupFunction = "sum")),
+            EditedProperty(null, "ID", "unique_id", PropertyKind.UNIQUE_ID, settings = PropertySettings(idPrefix = "BK")),
+            EditedProperty(null, "Stage", "status", PropertyKind.STATUS),
+            EditedProperty(null, "Where", "place", PropertyKind.PLACE),
+        )
+
+        repo.editSchema("db", SchemaEdits.change(original, edited))
+
+        val patch = notion.requests.single { it.method == "PATCH" }
+        assertEquals("/data_sources/db", patch.path)
+        assertEquals(
+            """{"properties":{""" +
+                """"a1":{"name":"Genre","select":{}},""" +
+                """"n1":{"number":{"format":"euro"}},""" +
+                """"Double":{"formula":{"expression":"prop(\"Price\") * 2"}},""" +
+                """"Shelf":{"relation":{"data_source_id":"ds-shelves","type":"dual_property","dual_property":{}}},""" +
+                """"Pages":{"rollup":{"relation_property_id":"r1","rollup_property_id":"p9","function":"sum"}},""" +
+                """"ID":{"unique_id":{"prefix":"BK"}},""" +
+                """"Stage":{"status":{}},""" +
+                """"Where":{"place":{}}}}""",
+            patch.body,
+        )
+    }
+
+    @Test
+    fun `Edit database sends the description and lock to the database and only the name to its data source`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path == "/databases/db-1" && sent.method == "GET" ->
+                    200 to """{"object":"database","id":"db-1","title":[{"plain_text":"Books"}],"description":[{"plain_text":"Old"}],"is_locked":true,"is_inline":true,"parent":{"type":"page_id","page_id":"p-1"},"data_sources":[{"id":"ds-1","name":"Books"}]}"""
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        val info = repo.freshDatabaseInfo("db-1", "ds-1")
+        assertEquals("Old", info?.description)
+        assertEquals(true, info?.locked)
+        assertEquals(true, info?.inline)
+        assertEquals("p-1", info?.parentId)
+
+        val edit = DatabaseEdit.of("Books", "Reading", null, null, false, info, "New", locked = false, inline = true)
+        repo.editDatabase("db-1", "ds-1", single = true, edit)
+
+        val patches = notion.requests.filter { it.method == "PATCH" }
+        assertEquals(listOf("/databases/db-1", "/data_sources/ds-1"), patches.map { it.path })
+        assertEquals(
+            """{"title":[{"type":"text","text":{"content":"Reading"}}],"description":[{"type":"text","text":{"content":"New"}}],"is_locked":false}""",
+            patches[0].body,
+        )
+        assertEquals("""{"title":[{"type":"text","text":{"content":"Reading"}}]}""", patches[1].body)
+    }
+
+    @Test
+    fun `a lock change alone sends nothing to the data source`() = runBlocking {
+        notion.respond = { 200 to "{}" }
+        val repo = repository()
+        repo.editDatabase("db-1", "ds-1", single = true, DatabaseEdit(locked = true))
+        val patch = notion.requests.single { it.method == "PATCH" }
+        assertEquals("/databases/db-1", patch.path)
+        assertEquals("""{"is_locked":true}""", patch.body)
     }
 
     // ---- Photos and files ----

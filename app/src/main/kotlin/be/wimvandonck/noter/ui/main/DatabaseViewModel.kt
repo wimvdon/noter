@@ -11,6 +11,7 @@ import be.wimvandonck.noter.data.api.NotionErrors
 import be.wimvandonck.noter.data.api.NotionException
 import be.wimvandonck.noter.data.model.CardLayout
 import be.wimvandonck.noter.data.model.CustomEmoji
+import be.wimvandonck.noter.data.model.DatabaseInfo
 import be.wimvandonck.noter.data.model.DatabaseSchema
 import be.wimvandonck.noter.data.model.DatabaseSetup
 import be.wimvandonck.noter.data.model.NotionUser
@@ -23,6 +24,7 @@ import be.wimvandonck.noter.data.model.PageRef
 import be.wimvandonck.noter.data.model.PinnedDatabase
 import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.QuickAction
+import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.logic.DatabaseEdit
 import be.wimvandonck.noter.logic.EditedProperty
 import be.wimvandonck.noter.logic.PropertyKind
@@ -106,7 +108,30 @@ data class QuickChipState(
  * are compared with, so properties loading later never read as removed), whether Notion is saving
  * it, and what went wrong ([error]: see NotionErrors).
  */
-data class DatabaseEditState(val properties: List<PropertySchema>, val saving: Boolean = false, val error: String? = null)
+data class DatabaseEditState(
+    val properties: List<PropertySchema>,
+    val saving: Boolean = false,
+    val error: String? = null,
+    /** The database as Notion has it (description, lock, inline; null until known). */
+    val info: DatabaseInfo? = null,
+    /** The data sources a new relation can link to (see SchemaEdits.relationTargets). */
+    val relationTargets: List<PageRef> = emptyList(),
+    /** The properties of related data sources, by data source ID, for a new rollup (loaded when asked). */
+    val related: Map<String, List<PropertySchema>> = emptyMap(),
+)
+
+/** What Edit database's Save sends to [DatabaseViewModel.saveEdit]. */
+data class DatabaseEditInput(
+    val title: String,
+    val emoji: String?,
+    val custom: CustomEmoji?,
+    val iconChanged: Boolean,
+    val description: String,
+    val locked: Boolean,
+    val inline: Boolean,
+    val properties: List<EditedProperty>,
+    val names: Map<PropertyKind, String>,
+)
 
 /**
  * A dialog that changes the data source's Notion views: a new view, a new name for [view], or
@@ -478,7 +503,35 @@ class DatabaseViewModel(
 
     /** Opens Edit database (⋮, or a tap on the name or icon). */
     fun openEdit() {
-        _editing.value = DatabaseEditState(state.value.properties)
+        val id = sourceId
+        val targets = SchemaEdits.relationTargets(repository.recent.value.orEmpty(), repository.owners.value, repository.owners.value[id.replace("-", "")])
+        _editing.value = DatabaseEditState(state.value.properties, relationTargets = targets)
+        viewModelScope.launch {
+            val info = repository.freshDatabaseInfo(databaseLink.value, id)
+            _editing.update { it?.copy(info = info) }
+        }
+        // Home's list not loaded yet: the relation's databases from Notion's search.
+        if (targets.isEmpty()) {
+            viewModelScope.launch {
+                val found = runCatching { repository.searchDatabases() }.getOrDefault(emptyList())
+                val items = found.map { WorkspaceItem(it.id, isDatabase = true, title = it.title) }
+                _editing.update { it?.copy(relationTargets = SchemaEdits.relationTargets(items, repository.owners.value, repository.owners.value[id.replace("-", "")])) }
+            }
+        }
+    }
+
+    /** Loads the properties of related data source [id] for a new rollup (once). */
+    fun loadRelated(id: String) {
+        if (_editing.value?.related?.containsKey(id) != false) return
+        viewModelScope.launch {
+            val properties = try {
+                repository.propertiesOf(id)
+            } catch (e: NotionException) {
+                _editing.update { it?.copy(error = NotionErrors.of(e)) }
+                return@launch
+            }
+            _editing.update { it?.copy(related = it.related + (id to properties)) }
+        }
     }
 
     fun dismissEdit() {
@@ -486,27 +539,23 @@ class DatabaseViewModel(
     }
 
     /**
-     * Saves Edit database in Notion at once: the name and icon ([emoji] when [iconChanged]) of the
-     * database, and [properties] of the data source shown ([names]: Notion's name for a new
-     * property of each kind). It closes when Notion took everything, else stays open with the error.
+     * Saves Edit database in Notion at once: the name, icon, description, lock and inline switch of
+     * the database ([input]), and the properties of the data source shown (with Notion's name for a
+     * new property of each kind). It closes when Notion took everything, else stays open with the error.
      */
-    fun saveEdit(
-        title: String,
-        emoji: String?,
-        custom: CustomEmoji?,
-        iconChanged: Boolean,
-        properties: List<EditedProperty>,
-        names: Map<PropertyKind, String>,
-    ) {
+    fun saveEdit(input: DatabaseEditInput) {
         val open = _editing.value ?: return
-        if (open.saving || title.isBlank()) return
+        if (open.saving || input.title.isBlank() || SchemaEdits.incomplete(input.properties).isNotEmpty()) return
         val ui = state.value
-        val edit = DatabaseEdit(title = title.trim().takeIf { it != ui.title }, emoji = emoji, setsIcon = iconChanged, custom = custom)
-        val change = SchemaEdits.change(open.properties, properties, names)
+        val edit = DatabaseEdit.of(
+            ui.title, input.title, input.emoji, input.custom, input.iconChanged, open.info,
+            input.description, input.locked, input.inline,
+        )
+        val change = SchemaEdits.change(open.properties, input.properties, input.names)
         _editing.value = open.copy(saving = true, error = null)
         viewModelScope.launch {
             try {
-                if (edit.title != null || edit.setsIcon) {
+                if (!edit.isEmpty) {
                     repository.editDatabase(databaseLink.value, sourceId, single = sources.value == null, edit)
                     // Shown at once, whichever name the screen had (the database's or its data source's).
                     label.value = edit.title(ui.title) to edit.icon(ui.icon)

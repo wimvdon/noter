@@ -207,7 +207,7 @@
     <string name="new_database_in_page">Nuovo database in questa pagina</string>
     <string name="new_database_at_top">Nuovo database in cima</string>
     <string name="new_database_name">Nome del database</string>
-    <string name="new_database_properties">Le sue proprietà oltre al nome. Formati e viste si impostano in Notion.</string>
+    <string name="new_database_properties">Le sue proprietà oltre al nome.</string>
     <string name="new_database_tags">Tag</string>
     <string name="new_database_title_property">Nome</string>
     <string name="new_database_create">Crea</string>
@@ -215,7 +215,7 @@
     <string name="action_rename">Rinomina</string>
     <string name="edit_database">Modifica database</string>
     <string name="action_save">Salva</string>
-    <string name="edit_database_properties">Proprietà e le loro opzioni. Formati e viste si impostano in Notion.</string>
+    <string name="edit_database_properties">Proprietà</string>
     <string name="remove_properties_title">Rimuovere le proprietà?</string>
     <string name="remove_properties_body">%1$s e i loro valori su ogni pagina vengono eliminati in Notion.</string>
     <string name="remove_and_save">Rimuovi e salva</string>
@@ -244,7 +244,7 @@
     <string name="property_kind_other">Altro</string>
     <string name="new_database_add_property">Aggiungi proprietà</string>
     <string name="new_database_remove_property">Rimuovi %1$s</string>
-    <string name="new_database_created">Database creato. Aprilo in Notion per modificarne le viste.</string>
+    <string name="new_database_created">Database creato</string>
     <string name="new_database_starter_empty">Vuoto</string>
     <string name="new_database_starter_tasks">Attività</string>
     <string name="new_database_starter_projects">Progetti</string>
@@ -304,7 +304,6 @@
     </plurals>
     <string name="view_settings">Impostazioni viste</string>
     <string name="edit_views_in_notion">Modifica le viste in Notion</string>
-    <string name="more_in_notion">Altre opzioni in Notion</string>
     <!-- Managing a database's Notion views -->
     <string name="view_options">Opzioni vista</string>
     <string name="new_view">Nuova vista</string>
@@ -387,4 +386,42 @@
     <string name="notion_color_purple">Viola</string>
     <string name="notion_color_pink">Rosa</string>
     <string name="notion_color_red">Rosso</string>
+    <string name="property_kind_place">Luogo</string>
+    <string name="number_format">Formato numero</string>
+    <string name="number_format_number">Numero</string>
+    <string name="number_format_number_with_commas">Numero con separatori</string>
+    <string name="number_format_percent">Percentuale</string>
+    <string name="number_format_euro">Euro</string>
+    <string name="number_format_dollar">Dollaro</string>
+    <string name="number_format_pound">Sterlina</string>
+    <string name="number_format_yen">Yen</string>
+    <string name="relation_database">Database</string>
+    <string name="relation_two_way">Mostra anche nell’altro database</string>
+    <string name="relation_no_databases">Nessun database trovato</string>
+    <string name="rollup_property">Proprietà</string>
+    <string name="rollup_function">Calcola</string>
+    <string name="rollup_loading">Caricamento proprietà…</string>
+    <string name="rollup_fn_show_original">Mostra originale</string>
+    <string name="rollup_fn_count">Conta tutto</string>
+    <string name="rollup_fn_count_values">Conta valori</string>
+    <string name="rollup_fn_unique">Conta valori unici</string>
+    <string name="rollup_fn_empty">Conta vuoti</string>
+    <string name="rollup_fn_not_empty">Conta non vuoti</string>
+    <string name="rollup_fn_sum">Somma</string>
+    <string name="rollup_fn_average">Media</string>
+    <string name="rollup_fn_min">Min</string>
+    <string name="rollup_fn_max">Max</string>
+    <string name="rollup_fn_earliest_date">Data più vecchia</string>
+    <string name="rollup_fn_latest_date">Data più recente</string>
+    <string name="rollup_fn_checked">Selezionate</string>
+    <string name="rollup_fn_percent_checked">Percentuale selezionate</string>
+    <string name="unique_id_prefix">Prefisso (facoltativo)</string>
+    <string name="required_field">Obbligatorio</string>
+    <string name="property_menu">Altro per %1$s</string>
+    <string name="change_type">Cambia tipo</string>
+    <string name="change_types_title">Cambiare i tipi?</string>
+    <string name="change_types_body">%1$s cambiano tipo. I valori che non corrispondono possono andare persi.</string>
+    <string name="database_description">Descrizione</string>
+    <string name="database_locked">Bloccato in Notion</string>
+    <string name="database_locked_hint">È bloccata solo l’app di Notion; Noter può ancora modificarlo.</string>
 </resources>

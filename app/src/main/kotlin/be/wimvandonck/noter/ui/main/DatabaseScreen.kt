@@ -373,6 +373,7 @@ fun DatabaseScreen(
             customEmojis = customEmojis,
             onShowIcons = viewModel::loadCustomEmojis,
             onSave = viewModel::saveEdit,
+            onLoadRelated = viewModel::loadRelated,
             onOpenInNotion = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, state.notionUrl.toUri())) } },
             onDismiss = viewModel::dismissEdit,
         )

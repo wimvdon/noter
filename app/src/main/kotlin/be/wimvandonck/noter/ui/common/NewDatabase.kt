@@ -33,7 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,6 +52,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+import be.wimvandonck.noter.data.model.PageRef
+import be.wimvandonck.noter.logic.PropertyConfigs
+import be.wimvandonck.noter.logic.SchemaEdits
 
 /**
  * The New database dialog while it is open (#71): where the database goes ([parentPageId], null:
@@ -62,6 +67,8 @@ data class NewDatabaseState(
     val workspace: String? = null,
     val creating: Boolean = false,
     val error: String? = null,
+    /** The data sources a relation can link to (see SchemaEdits.relationTargets). */
+    val relationTargets: List<PageRef> = emptyList(),
 )
 
 /** Opens, sends and closes the New database dialog for a ViewModel (Home's +, a page's ⋮). */
@@ -72,7 +79,10 @@ class DatabaseCreation(private val scope: CoroutineScope, private val repository
     val state: StateFlow<NewDatabaseState?> get() = _state
 
     fun open(parentPageId: String?, workspace: String? = null) {
-        _state.value = NewDatabaseState(parentPageId, workspace)
+        val owners = repository.owners.value
+        val home = workspace ?: parentPageId?.let { owners[it.replace("-", "")] }
+        val targets = SchemaEdits.relationTargets(repository.recent.value.orEmpty(), owners, home)
+        _state.value = NewDatabaseState(parentPageId, workspace, relationTargets = targets)
     }
 
     fun dismiss() {
@@ -90,7 +100,7 @@ class DatabaseCreation(private val scope: CoroutineScope, private val repository
         onCreated: (String) -> Unit,
     ) {
         val target = _state.value ?: return
-        if (target.creating || (title.isBlank() && starter == DatabaseStarter.EMPTY)) return
+        if (target.creating || !NewDatabases.canCreate(title, properties, starter)) return
         _state.value = target.copy(creating = true, error = null)
         scope.launch {
             try {
@@ -123,20 +133,26 @@ internal fun kindNames(): Map<PropertyKind, String> = mapOf(
     PropertyKind.CREATED_BY to stringResource(R.string.property_kind_created_by),
     PropertyKind.LAST_EDITED_TIME to stringResource(R.string.property_kind_last_edited_time),
     PropertyKind.LAST_EDITED_BY to stringResource(R.string.property_kind_last_edited_by),
+    PropertyKind.FORMULA to stringResource(R.string.property_kind_formula),
+    PropertyKind.RELATION to stringResource(R.string.property_kind_relation),
+    PropertyKind.ROLLUP to stringResource(R.string.property_kind_rollup),
+    PropertyKind.UNIQUE_ID to stringResource(R.string.property_kind_id),
+    PropertyKind.PLACE to stringResource(R.string.property_kind_place),
 )
 
-/** The properties being set up, kept across rotation as "KIND name options" strings. */
-private val PropertiesSaver = listSaver<List<NewProperty>, String>(
-    save = { list -> list.map { it.kind.name + "\u0000" + it.name + "\u0000" + it.options } },
-    restore = { saved -> saved.mapNotNull { line -> line.split("\u0000", limit = 3).takeIf { it.size == 3 }?.let { NewProperty(PropertyKind.valueOf(it[0]), it[1], it[2]) } } },
+/** The properties being set up, kept across rotation as JSON. */
+private val PropertiesSaver = Saver<List<NewProperty>, String>(
+    save = { Json.encodeToString(ListSerializer(NewProperty.serializer()), it) },
+    restore = { runCatching { Json.decodeFromString(ListSerializer(NewProperty.serializer()), it) }.getOrNull() },
 )
 
 /**
  * A database's name and what it starts from: Empty (its properties besides the title: Tags at
  * first, as in Notion; Add property adds one of any kind the API can make, named as Notion names
  * it, several of a kind allowed, with starting options for a select) or one of Notion's Tasks and
- * Projects, which come with their own properties. Inside a page it can show in the page. Anything
- * else (formats, views) is changed in Notion afterwards.
+ * Projects, which come with their own properties. Kinds with settings (a formula, a relation, a
+ * number's format, an ID's prefix) get a small form under their name. Inside a page it can show in
+ * the page. Edit database changes it afterwards.
  */
 @Composable
 fun NewDatabaseDialog(
@@ -226,6 +242,15 @@ fun NewDatabaseDialog(
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
+                            if (property.kind in PropertyConfigs.HAS_SETTINGS) {
+                                PropertySettingsForm(
+                                    kind = property.kind,
+                                    settings = property.settings,
+                                    onChange = { changed -> properties = properties.toMutableList().also { it[index] = property.copy(settings = changed) } },
+                                    enabled = enabled,
+                                    relationTargets = state.relationTargets,
+                                )
+                            }
                         }
                         IconButton(onClick = { properties = properties.filterIndexed { i, _ -> i != index } }, enabled = enabled) {
                             Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.new_database_remove_property, property.name))
@@ -239,7 +264,7 @@ fun NewDatabaseDialog(
                         Text(stringResource(R.string.new_database_add_property))
                     }
                     DropdownMenu(expanded = choosingKind, onDismissRequest = { choosingKind = false }) {
-                        PropertyKind.entries.forEach { kind ->
+                        NewDatabases.addableKinds(properties).forEach { kind ->
                             DropdownMenuItem(
                                 text = { Text(names.getValue(kind)) },
                                 onClick = {
@@ -272,7 +297,7 @@ fun NewDatabaseDialog(
         confirmButton = {
             TextButton(
                 onClick = { onCreate(title, titleName, properties, names, starter, inline) },
-                enabled = (title.isNotBlank() || starter != DatabaseStarter.EMPTY) && enabled,
+                enabled = NewDatabases.canCreate(title, properties, starter) && enabled,
             ) {
                 if (state.creating) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -285,7 +310,7 @@ fun NewDatabaseDialog(
     )
 }
 
-/** After a new database opens: its properties and views are changed in Notion. */
+/** After a new database opens: "Database created". */
 fun showDatabaseCreatedToast(context: Context) {
     Toast.makeText(context, R.string.new_database_created, Toast.LENGTH_LONG).show()
 }
