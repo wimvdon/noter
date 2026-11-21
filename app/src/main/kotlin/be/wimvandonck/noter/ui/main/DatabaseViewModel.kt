@@ -16,6 +16,8 @@ import be.wimvandonck.noter.data.model.NotionUser
 import be.wimvandonck.noter.data.model.NoteSummary
 import be.wimvandonck.noter.data.model.NotionView
 import be.wimvandonck.noter.data.model.PageIcon
+import be.wimvandonck.noter.data.model.PageTemplate
+import be.wimvandonck.noter.logic.TemplatePick
 import be.wimvandonck.noter.data.model.PageRef
 import be.wimvandonck.noter.data.model.PinnedDatabase
 import be.wimvandonck.noter.data.model.PropertySchema
@@ -58,6 +60,8 @@ data class DatabaseUiState(
     val followNotion: Boolean = true,
     /** The data source's properties (the cards can show some). */
     val properties: List<PropertySchema> = emptyList(),
+    /** The data source's page templates (for New from template). */
+    val templates: List<PageTemplate> = emptyList(),
     /** Notion's web link to the database, for Open in Notion, Share and editing its views. */
     val notionUrl: String = "",
     /** The data source's Notion views shown as tabs, in Notion's order. */
@@ -166,6 +170,7 @@ class DatabaseViewModel(
             cards = PropertyLayouts.cards(setup, settings.propertyLayouts[id], viewShown, db?.schema),
             followNotion = PropertyLayouts.followsNotion(setup, settings.propertyLayouts[id]),
             properties = db?.schema?.properties.orEmpty(),
+            templates = db?.schema?.templates.orEmpty(),
             notionUrl = ReadOnlyBlocks.notionUrl(link ?: db?.schema?.databaseId ?: pinKey(id, list)),
             views = shown,
             viewId = viewId,
@@ -347,10 +352,10 @@ class DatabaseViewModel(
 
 
     /** A new note in the data source shown (Notion gives it the view's defaults when it shows it). */
-    fun createNote(onCreated: (String) -> Unit) {
+    fun createNote(pick: TemplatePick = TemplatePick.Auto, onCreated: (String) -> Unit) {
         val id = state.value.content.databaseId ?: return
         viewModelScope.launch {
-            val note = repository.createNote(id) ?: return@launch
+            val note = repository.createNote(id, template = pick) ?: return@launch
             onCreated(note)
         }
     }

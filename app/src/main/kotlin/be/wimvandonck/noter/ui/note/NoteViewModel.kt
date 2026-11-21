@@ -22,6 +22,7 @@ import be.wimvandonck.noter.data.notion.PropertyCodec
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.sync.SaveTiming
 import be.wimvandonck.noter.logic.ContentMerge
+import be.wimvandonck.noter.logic.NoteTemplates
 import be.wimvandonck.noter.logic.DatabaseSetups
 import be.wimvandonck.noter.logic.DocumentEditor
 import be.wimvandonck.noter.logic.EditResult
@@ -135,6 +136,11 @@ class NoteViewModel(
 
     init {
         viewModelScope.launch {
+            repository.contentReplaced.collect { id ->
+                if (repository.resolve(id) == repository.resolve(pageId)) showTemplateContent()
+            }
+        }
+        viewModelScope.launch {
             val cached = repository.cachedContent(pageId)
             if (cached != null) {
                 setLoaded(cached.blocks)
@@ -161,6 +167,18 @@ class NoteViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * A note made from a template got its content from Notion (see NotesRepository.settleTemplate):
+     * it shows, with what was typed meanwhile after it.
+     */
+    private suspend fun showTemplateContent() {
+        val fresh = repository.cachedContent(pageId) ?: return
+        val shown = blocks.value
+        val merged = NoteTemplates.mergeTyped(fresh.blocks, shown)
+        setLoaded(merged)
+        if (merged != fresh.blocks) scheduleSave()
     }
 
     private fun setLoaded(content: List<Block>) {

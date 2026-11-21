@@ -31,6 +31,8 @@ sealed interface PendingOp {
          * answer was lost, so a later try first looks for it (NotesRepository.findCreated).
          */
         val sentAt: Long? = null,
+        /** The page template the note is made from (null: none). Then no [children] are sent with it. */
+        val template: be.wimvandonck.noter.data.model.NoteTemplate? = null,
     ) : PendingOp
 
     @Serializable

@@ -13,6 +13,8 @@ import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.logic.NotionViews
+import be.wimvandonck.noter.logic.SharedContent
+import be.wimvandonck.noter.logic.TemplatePick
 import be.wimvandonck.noter.data.model.CardLayout
 import be.wimvandonck.noter.data.store.CacheStore
 import be.wimvandonck.noter.data.store.DatabaseCache
@@ -60,6 +62,8 @@ class NotesRepositoryTest {
             settings = settings,
             cache = cache,
             scope = scope,
+            templateDelaysMs = listOf(50L, 100L),
+            timeZone = { "Europe/Brussels" },
         ).also { repo ->
             runBlocking { settings.update { it.copy(setups = it.setups + ("db" to DatabaseSetup())) } }
             repo.start()
@@ -698,5 +702,170 @@ class NotesRepositoryTest {
         repo.createNote("db")
         repo.flush()
         assertTrue(repo.lastSentMs.value > 0)
+    }
+
+    // ---- Page templates ----
+
+    private val templatesJson =
+        """{"templates":[{"id":"t-trip","name":"Trip","is_default":false},{"id":"t-weekly","name":"Weekly","is_default":true}],"has_more":false}"""
+
+    /** A data source with templates; [templateBlocks] is what Notion has in a new page once the template is applied. */
+    private fun notionWithTemplates(templateBlocks: MutableList<String> = mutableListOf(), applied: () -> Boolean = { true }) {
+        var next = 0
+        notion.respond = { sent ->
+            when {
+                sent.method == "GET" && sent.path.startsWith("/data_sources/db/templates") -> 200 to templatesJson
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list()
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.method == "POST" && sent.path == "/pages" -> 200 to FakeNotion.page("page-1", "db")
+                sent.method == "GET" && sent.path == "/pages/page-1" -> 200 to FakeNotion.page("page-1", "db", "From template")
+                sent.method == "GET" && sent.path.startsWith("/blocks/page-1/children") ->
+                    200 to FakeNotion.list(*(if (applied()) templateBlocks.toTypedArray() else emptyArray()))
+                sent.method == "PATCH" && sent.path == "/blocks/page-1/children" -> {
+                    val texts = Regex("\"content\":\"([^\"]*)\"").findAll(sent.body).map { it.groupValues[1] }.toList()
+                    val added = texts.map { FakeNotion.todo("new-${++next}", it) }
+                    templateBlocks += added
+                    200 to FakeNotion.list(*added.toTypedArray())
+                }
+                else -> 200 to "{}"
+            }
+        }
+    }
+
+    private fun createBody() = notion.requests.single { it.method == "POST" && it.path == "/pages" }.body
+
+    @Test
+    fun `a new note gets the default template, with the phone's time zone and no content of its own`() = runBlocking {
+        notionWithTemplates()
+        val repo = repository()
+        repo.createNote("db")
+        repo.flush()
+
+        assertEquals(listOf("t-weekly", "t-trip"), repo.databases.value["db"]?.schema?.templates?.map { it.id })
+        val body = createBody()
+        assertTrue(body, body.contains("\"template\":{\"type\":\"default\",\"timezone\":\"Europe/Brussels\"}"))
+        assertFalse(body, body.contains("children"))
+        // The empty title would replace the template's own.
+        assertFalse(body, body.contains("\"title\""))
+    }
+
+    @Test
+    fun `a chosen template is sent by its ID, and an empty note gets none`() = runBlocking {
+        notionWithTemplates()
+        val repo = repository()
+        repo.createNote("db", template = TemplatePick.Specific("t-trip"))
+        repo.flush()
+        assertTrue(createBody(), createBody().contains("\"template\":{\"type\":\"template_id\",\"template_id\":\"t-trip\",\"timezone\":\"Europe/Brussels\"}"))
+
+        notion.requests.clear()
+        repo.createNote("db", template = TemplatePick.Empty)
+        repo.flush()
+        assertFalse(createBody(), createBody().contains("template"))
+        assertTrue(createBody(), createBody().contains("\"title\""))
+    }
+
+    @Test
+    fun `a database without templates makes plain notes`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/templates") -> 200 to """{"templates":[],"has_more":false}"""
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list()
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.method == "POST" && sent.path == "/pages" -> 200 to FakeNotion.page("page-1", "db")
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.createNote("db")
+        repo.flush()
+        assertFalse(createBody(), createBody().contains("template"))
+    }
+
+    @Test
+    fun `notes shared to the app never use a template`() = runBlocking {
+        notionWithTemplates()
+        val repo = repository()
+        repo.saveShared(SharedContent("Idea", "Some text", null), "db", null)
+        val body = createBody()
+        assertFalse(body, body.contains("template"))
+        assertTrue(body, body.contains("children"))
+    }
+
+    @Test
+    fun `when Notion refuses the template the note is made empty`() = runBlocking {
+        var refused = false
+        notionWithTemplates()
+        val inner = notion.respond
+        notion.respond = { sent ->
+            if (sent.method == "POST" && sent.path == "/pages" && sent.body.contains("\"template\"")) {
+                refused = true
+                400 to """{"object":"error","status":400,"code":"validation_error","message":"no default template"}"""
+            } else {
+                inner(sent)
+            }
+        }
+        val repo = repository()
+        val localId = checkNotNull(repo.createNote("db"))
+        repo.flush()
+        assertTrue(refused)
+        assertEquals("page-1", repo.resolve(localId))
+        assertEquals(2, notion.requests.count { it.method == "POST" && it.path == "/pages" })
+    }
+
+    @Test
+    fun `the template's content and values are downloaded after Notion applied it`() = runBlocking {
+        var applied = false
+        val blocks = mutableListOf(FakeNotion.todo("tb1", "Agenda"))
+        notionWithTemplates(blocks) { applied }
+        val repo = repository()
+        val localId = checkNotNull(repo.createNote("db"))
+        val replaced = scope.launch { repo.contentReplaced.first { repo.resolve(it) == "page-1" } }
+        repo.flush()
+        assertEquals(emptyList<Block>(), repo.cachedContent(localId)?.blocks.orEmpty())
+        // Notion is still busy with the template at the first look.
+        applied = true
+        withTimeout(5_000) { replaced.join() }
+
+        assertEquals(listOf("Agenda"), repo.cachedContent("page-1")?.blocks?.map { it.text })
+        assertEquals("From template", repo.note(localId).first()?.title)
+        // Nothing was written into the note from here.
+        assertTrue(notion.requests.none { it.method == "PATCH" })
+    }
+
+    @Test
+    fun `lines typed before the template arrived are added after its content, once`() = runBlocking {
+        var applied = false
+        val blocks = mutableListOf(FakeNotion.todo("tb1", "Agenda"))
+        notionWithTemplates(blocks) { applied }
+        val repo = repository()
+        val localId = checkNotNull(repo.createNote("db"))
+        repo.saveContent(localId, listOf(Block("typed", type = BlockType.TODO, text = "Call Sam")))
+        val replaced = scope.launch { repo.contentReplaced.first { repo.resolve(it) == "page-1" } }
+        repo.flush()
+        // Held back: nothing of the typed line reaches the page before the template.
+        assertTrue(notion.requests.none { it.method == "PATCH" })
+        applied = true
+        withTimeout(5_000) { replaced.join() }
+        withTimeout(5_000) { while (repo.pendingCount.first() > 0) kotlinx.coroutines.delay(20) }
+
+        assertEquals(listOf("Agenda", "Call Sam"), repo.cachedContent("page-1")?.blocks?.map { it.text })
+        val appends = notion.requests.filter { it.method == "PATCH" && it.path == "/blocks/page-1/children" }
+        assertEquals(1, appends.size)
+        assertTrue(appends.single().body, appends.single().body.contains("after_block"))
+        assertTrue(appends.single().body, appends.single().body.contains("tb1"))
+        assertEquals(2, blocks.size)
+    }
+
+    @Test
+    fun `typed lines still go in when the template never arrives`() = runBlocking {
+        notionWithTemplates(mutableListOf()) { false }
+        val repo = repository()
+        val localId = checkNotNull(repo.createNote("db"))
+        repo.saveContent(localId, listOf(Block("typed", type = BlockType.TODO, text = "Call Sam")))
+        repo.flush()
+        withTimeout(5_000) { while (repo.pendingCount.first() > 0 || notion.requests.none { it.method == "PATCH" }) kotlinx.coroutines.delay(20) }
+
+        assertEquals(1, notion.requests.count { it.method == "PATCH" && it.path == "/blocks/page-1/children" })
+        assertEquals(listOf("Call Sam"), repo.cachedContent("page-1")?.blocks?.map { it.text })
     }
 }

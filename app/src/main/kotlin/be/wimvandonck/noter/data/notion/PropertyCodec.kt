@@ -12,6 +12,7 @@ import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.NoteSummary
 import be.wimvandonck.noter.data.model.NotionUser
 import be.wimvandonck.noter.data.model.PropertySchema
+import be.wimvandonck.noter.data.model.PageTemplate
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.model.SelectOption
 import kotlinx.serialization.json.JsonObject
@@ -39,6 +40,13 @@ object PropertyCodec {
         val databaseId = database.objOrNull("parent")?.stringOrNull("database_id")
         return DatabaseSchema(id = id, title = title, properties = sortForDisplay(properties), databaseId = databaseId)
     }
+
+    /** The templates in Notion's list (`GET /data_sources/{id}/templates`): the default one first. */
+    fun parseTemplates(templates: List<JsonObject>): List<PageTemplate> =
+        templates.mapNotNull { t ->
+            val id = t.stringOrNull("id") ?: return@mapNotNull null
+            PageTemplate(id, t.stringOrNull("name").orEmpty(), t.boolOrNull("is_default") == true)
+        }.sortedByDescending { it.isDefault }
 
     /** Title first, then the database's own order is unknown to the API, so editable before computed, by name. */
     private fun sortForDisplay(properties: List<PropertySchema>): List<PropertySchema> =

@@ -339,8 +339,10 @@ class NotionClient(
         properties: Map<String, Any?>,
         children: List<Map<String, Any?>>,
         emoji: String? = null,
+        /** A page template's request (see NoteTemplates.request); Notion allows no [children] with it. */
+        template: Map<String, Any?>? = null,
     ): JsonObject =
-        createPage(mapOf("type" to "data_source_id", "data_source_id" to dataSourceId), properties, children, emoji)
+        createPage(mapOf("type" to "data_source_id", "data_source_id" to dataSourceId), properties, children, emoji, template = template)
 
     /**
      * Creates a page on its own: inside page [parentPageId], or at the top of [workspace] (the main
@@ -368,6 +370,7 @@ class NotionClient(
         children: List<Map<String, Any?>>,
         emoji: String?,
         key: String? = null,
+        template: Map<String, Any?>? = null,
     ): JsonObject =
         call(
             "POST", "/pages",
@@ -375,7 +378,11 @@ class NotionClient(
                 put("parent", parent)
                 put("properties", properties)
                 if (emoji != null) put("icon", emojiIcon(emoji))
-                if (children.isNotEmpty()) put("children", children.take(MAX_CHILDREN))
+                if (template != null) {
+                    put("template", template)
+                } else if (children.isNotEmpty()) {
+                    put("children", children.take(MAX_CHILDREN))
+                }
             },
             key = key,
             adds = true,
@@ -468,12 +475,18 @@ class NotionClient(
             paged { cursor -> call("GET", "/users?page_size=100" + (cursor?.let { "&start_cursor=$it" } ?: ""), key = key) }
         }.flatten().distinctBy { it.stringOrNull("id") ?: it.toString() }
 
-    private suspend fun paged(fetchPage: suspend (cursor: String?) -> JsonObject): List<JsonObject> {
+    /** The page templates of a data source (`{id, name, is_default}` each). */
+    suspend fun listTemplates(dataSourceId: String): List<JsonObject> =
+        paged(listKey = "templates") { cursor ->
+            call("GET", "/data_sources/$dataSourceId/templates?page_size=100" + (cursor?.let { "&start_cursor=$it" } ?: ""))
+        }
+
+    private suspend fun paged(listKey: String = "results", fetchPage: suspend (cursor: String?) -> JsonObject): List<JsonObject> {
         val results = mutableListOf<JsonObject>()
         var cursor: String? = null
         do {
             val data = fetchPage(cursor)
-            data.arrayOrNull("results")?.forEach { el -> el.asObjectOrNull()?.let(results::add) }
+            data.arrayOrNull(listKey)?.forEach { el -> el.asObjectOrNull()?.let(results::add) }
             cursor = if (data.boolOrNull("has_more") == true) data.stringOrNull("next_cursor") else null
         } while (cursor != null)
         return results

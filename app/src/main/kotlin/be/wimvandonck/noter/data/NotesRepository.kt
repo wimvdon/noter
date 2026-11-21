@@ -11,6 +11,9 @@ import be.wimvandonck.noter.data.model.DatabaseInfo
 import be.wimvandonck.noter.data.model.withoutHidden
 import be.wimvandonck.noter.data.model.DatabaseSchema
 import be.wimvandonck.noter.data.model.NoteProperty
+import be.wimvandonck.noter.data.model.NoteTemplate
+import be.wimvandonck.noter.logic.NoteTemplates
+import be.wimvandonck.noter.logic.TemplatePick
 import be.wimvandonck.noter.data.model.NoteSummary
 import be.wimvandonck.noter.data.model.NotionUser
 import be.wimvandonck.noter.data.model.DatabaseSetup
@@ -134,6 +137,10 @@ class NotesRepository(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Downloads links shared to the app (#63, [saveShared]). */
     private val web: WebPageClient = WebPageClient(),
+    /** How long after a note is made from a template its content is asked for (again), in ms. */
+    private val templateDelaysMs: List<Long> = listOf(3_000L, 7_000L),
+    /** The phone's time zone, which Notion uses for a template's dates (@today, @now). */
+    private val timeZone: () -> String = { java.util.TimeZone.getDefault().id },
 ) {
     private val lock = Mutex()
     private val flushLock = Mutex()
@@ -169,6 +176,14 @@ class NotesRepository(
      * phone (null until the copy was read and nothing is kept; see [refreshRecent]).
      */
     val recent: StateFlow<List<WorkspaceItem>?> = _recent.asStateFlow()
+
+    /** Notes made from a template whose content isn't final yet (keys: page IDs): typed content waits for the template. */
+    private val settling = mutableSetOf<String>()
+
+    private val _contentReplaced = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /** A note's content was replaced in the copy here by what Notion has (a template arrived): its page ID. */
+    val contentReplaced: SharedFlow<String> = _contentReplaced
 
     private val _events = MutableSharedFlow<RepoEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<RepoEvent> = _events
@@ -305,7 +320,7 @@ class NotesRepository(
             }
             withContext(Dispatchers.IO) {
                 val schema = if (kind == RefreshKind.FULL || current.schema == null) {
-                    PropertyCodec.parseSchema(client.getDataSource(databaseId))
+                    readSchema(databaseId, current.schema)
                 } else {
                     current.schema
                 }
@@ -531,7 +546,7 @@ class NotesRepository(
         val title = SharedNotes.title(shared, article)
         val blocks = SharedNotes.blocks(shared, article)
         val id = if (databaseId != null) {
-            createNote(databaseId, title = title, children = blocks, url = shared.url)
+            createNote(databaseId, title = title, children = blocks, url = shared.url, template = TemplatePick.Empty)
         } else {
             createPage(null, workspace = workspace, title = title, children = blocks)
         } ?: return null
@@ -588,12 +603,14 @@ class NotesRepository(
         children: List<Block> = emptyList(),
         /** A shared link: goes in the database's URL property, when it has one (#68). */
         url: String? = null,
+        /** The page template to make it from: by default the data source's default one, when it has one. */
+        template: TemplatePick = TemplatePick.Auto,
     ): String? =
         withContext(Dispatchers.IO) {
             loadDatabase(databaseId)
             var schema = _databases.value[databaseId]?.schema
             if (schema == null) {
-                schema = runCatching { PropertyCodec.parseSchema(client.getDataSource(resolveSource(databaseId))) }.getOrNull()
+                schema = runCatching { readSchema(resolveSource(databaseId), null) }.getOrNull()
                     ?: return@withContext null
                 setState(databaseId) { it.copy(schema = schema) }
             }
@@ -611,7 +628,9 @@ class NotesRepository(
                 setState(databaseId) { it.copy(notes = listOf(note) + it.notes) }
                 _databases.value[databaseId]?.let { saveDatabaseCache(databaseId, it) }
                 cache.saveContent(PageContent(id, blocks = emptyList(), base = emptyList()))
-                enqueue(PendingOp.CreatePage(id, databaseId, children = children))
+                // Notion allows no content of our own with a template.
+                val chosen = if (children.isEmpty()) NoteTemplates.choose(template, schema.templates, timeZone()) else null
+                enqueue(PendingOp.CreatePage(id, databaseId, children = children, template = chosen))
             }
             scheduleFlush()
             id
@@ -688,7 +707,8 @@ class NotesRepository(
             val saved = existing.copy(blocks = withIds, dirty = dirty)
             cache.saveContent(saved)
             updatePreview(id, saved)
-            if (dirty) enqueue(PendingOp.SaveContent(id))
+            // A note made from a template waits: its lines go in after the template's content.
+            if (dirty && id !in settling) enqueue(PendingOp.SaveContent(id))
         }
         scheduleFlush()
     }
@@ -940,19 +960,34 @@ class NotesRepository(
         var made: JsonObject? = op.sentAt?.let { findCreated(op, note, source, it) }
         if (made == null) markSent(op)
         // Shared content goes with the page; when Notion refuses it (an image link it can't use), less of it.
-        val attempts = if (made != null) emptyList() else BlockCodec.createAttempts(op.children)
-        for ((i, children) in attempts.withIndex()) {
+        // A template goes first when there is one; when Notion refuses it (gone, no default any more), an empty note.
+        val template = op.template.takeIf { source != null }
+        val attempts: List<Pair<List<Map<String, Any?>>, NoteTemplate?>> = when {
+            made != null -> emptyList()
+            template != null -> listOf(emptyList<Map<String, Any?>>() to template, emptyList<Map<String, Any?>>() to null)
+            else -> BlockCodec.createAttempts(op.children).map { it to null }
+        }
+        var templated = false
+        for ((i, attempt) in attempts.withIndex()) {
+            val (children, using) = attempt
             try {
                 made = if (source == null) {
                     client.createPageIn(op.parentPageId, PropertyCodec.toCreateRequest(sent), sentEmoji, op.workspace, children)
                 } else {
-                    client.createPage(source, PropertyCodec.toCreateRequest(sent), children = children, emoji = sentEmoji)
+                    val properties = if (using != null) NoteTemplates.createProperties(sent) else sent
+                    client.createPage(
+                        source, PropertyCodec.toCreateRequest(properties), children = children, emoji = sentEmoji,
+                        template = using?.let(NoteTemplates::request),
+                    )
                 }
+                templated = using != null
                 break
             } catch (e: NotionException) {
                 if (e.status != 400 || i == attempts.lastIndex) throw e
             }
         }
+        // Sent before without an answer: it may have been made from the template too.
+        if (made != null && attempts.isEmpty() && template != null) templated = true
         val page = made ?: throw NotionException("Notion did not create the page", status = 500)
         val newId = page.stringOrNull("id") ?: throw NotionException("Notion did not return a page ID", status = 500)
         val created = PropertyCodec.parsePage(page, op.databaseId) ?: note.copy(id = newId)
@@ -984,7 +1019,15 @@ class NotesRepository(
             _databases.value[op.databaseId]?.let { saveDatabaseCache(op.databaseId, it) }
 
             val content = cache.content(oldId)
-            if (content != null && op.children.isNotEmpty() && content.blocks.isEmpty()) {
+            if (templated) {
+                // Notion fills the page in a moment: what the template brings is downloaded then. Lines
+                // typed meanwhile wait for it and go in after it (see settleTemplate).
+                settling += newId
+                if (content != null && content.blocks.hasEditableContent()) {
+                    cache.saveContent(content.copy(pageId = newId, base = emptyList(), dirty = true))
+                }
+                cache.deleteContent(oldId)
+            } else if (content != null && op.children.isNotEmpty() && content.blocks.isEmpty()) {
                 // The shared content went with the page: it is downloaded when the note opens.
                 cache.deleteContent(oldId)
             } else if (content != null) {
@@ -1003,6 +1046,65 @@ class NotesRepository(
                 order = s.order.mapValues { (_, ids) -> NoteOrdering.rename(ids, oldId, newId) },
             )
         }
+        if (templated) settleTemplate(newId)
+        return true
+    }
+
+    /**
+     * Notion applies a template after it made the page, so its content and property values arrive
+     * a moment later: ask for them after [templateDelaysMs] (again when the content is still
+     * empty). Lines typed here meanwhile were kept back; they go in after the template's content
+     * (or alone when it never came), see [NoteTemplates.mergeTyped].
+     */
+    private fun settleTemplate(id: String) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                for ((i, wait) in templateDelaysMs.withIndex()) {
+                    delay(wait)
+                    if (id in trashed || !hasKey()) break
+                    val final = i == templateDelaysMs.lastIndex
+                    val arrived = try {
+                        applyTemplateContent(id, final)
+                    } catch (e: NotionException) {
+                        false
+                    }
+                    if (arrived) break
+                }
+            } finally {
+                withContext(NonCancellable) {
+                    lock.withLock {
+                        settling -= id
+                        if (cache.content(id)?.dirty == true) enqueue(PendingOp.SaveContent(id))
+                    }
+                    scheduleFlush(0)
+                }
+            }
+        }
+    }
+
+    /**
+     * Downloads the page's properties and content once. Returns true when the template's content
+     * is here (or [final]: it is not coming), false to try again.
+     */
+    private suspend fun applyTemplateContent(id: String, final: Boolean): Boolean {
+        val page = client.getPage(id)
+        findNote(_databases.value, id)?.databaseId?.let { databaseId ->
+            PropertyCodec.parsePage(page, databaseId)?.let { replaceNote(databaseId, it) }
+        }
+        val before = cache.content(id)
+        val remote = downloadContent(id, before?.blocks.orEmpty(), page.stringOrNull("last_edited_time"))
+        if (remote.blocks.isEmpty() && !final) return false
+        lock.withLock {
+            val now = cache.content(id)
+            val saved = if (now?.dirty == true) {
+                remote.copy(blocks = NoteTemplates.mergeTyped(remote.blocks, now.blocks), base = remote.blocks, dirty = true)
+            } else {
+                remote
+            }
+            cache.saveContent(saved)
+            updatePreview(id, saved)
+        }
+        _contentReplaced.tryEmit(id)
         return true
     }
 
@@ -1525,8 +1627,22 @@ class NotesRepository(
 
     suspend fun searchDatabases(): List<PageRef> = withContext(Dispatchers.IO) { client.searchDatabases() }
 
+    /**
+     * A data source's properties and its page templates. When Notion can't list the templates
+     * (offline, not allowed), the ones known before stay.
+     */
+    private suspend fun readSchema(sourceId: String, previous: DatabaseSchema?): DatabaseSchema {
+        val schema = PropertyCodec.parseSchema(client.getDataSource(sourceId))
+        val templates = try {
+            PropertyCodec.parseTemplates(client.listTemplates(sourceId))
+        } catch (e: NotionException) {
+            previous?.templates.orEmpty()
+        }
+        return schema.copy(templates = templates)
+    }
+
     suspend fun fetchSchema(databaseId: String): DatabaseSchema = withContext(Dispatchers.IO) {
-        PropertyCodec.parseSchema(client.getDataSource(resolveSource(databaseId))).also { schema ->
+        readSchema(resolveSource(databaseId), _databases.value[databaseId]?.schema).also { schema ->
             if (_databases.value.containsKey(databaseId)) setState(databaseId) { it.copy(schema = SchemaOptions.withValues(schema, it.notes)) }
         }
     }

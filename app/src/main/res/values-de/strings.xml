@@ -24,6 +24,9 @@
     <string name="section_others">Andere</string>
     <string name="action_new_note">Neue Notiz</string>
     <string name="new_note_in">Neue Notiz in</string>
+    <string name="template_new_from">Neu aus Vorlage</string>
+    <string name="template_empty">Leere Notiz</string>
+    <string name="template_default">Standard</string>
     <string name="action_reorder">Neu anordnen</string>
     <string name="action_move_up">Nach oben</string>
     <string name="action_move_down">Nach unten</string>
