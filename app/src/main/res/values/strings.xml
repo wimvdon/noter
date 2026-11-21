@@ -300,6 +300,18 @@
     <string name="view_settings">View settings</string>
     <string name="edit_views_in_notion">Edit views in Notion</string>
     <string name="more_in_notion">More options in Notion</string>
+    <!-- Managing a database's Notion views -->
+    <string name="view_options">View options</string>
+    <string name="new_view">New view</string>
+    <string name="view_name">View name</string>
+    <string name="view_type_table">Table</string>
+    <string name="view_type_list">List</string>
+    <string name="new_view_hint">Filters, sorts and grouping are set in Notion.</string>
+    <string name="rename_view">Rename view</string>
+    <string name="delete_view_title">Delete “%1$s”?</string>
+    <string name="delete_view_body">The view is deleted in Notion, for everyone. Its notes stay.</string>
+    <string name="delete_view_confirm">Delete</string>
+    <string name="view_filters_in_notion">Filters and sorts in Notion</string>
     <string name="add_image">Add image</string>
     <string name="add_file">Add file</string>
     <string name="uploading">Uploading…</string>

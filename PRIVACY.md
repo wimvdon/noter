@@ -15,7 +15,7 @@ crash reporting.
   is used only for that workspace's pages, and searches ask every workspace. It reads the notes you open and the lists you show (Browse searches by
   title), and writes the changes you make (titles, properties, note content, photos and files you
   add, moving a note to Notion's trash, and taking a page out of it again: Undo after trashing, or Settings › Trash,
-  which lists what Notion's trash holds for 30 days).
+  which lists what Notion's trash holds for 30 days, and the views you add, rename or delete on a database).
   When you open a note's comments (and quietly when you open a note, to count them),
   it reads that page's comments from Notion, and it writes, changes or deletes a comment only when you
   send, edit or delete one. Comments stay in Notion; the phone keeps them in memory only while the app runs.

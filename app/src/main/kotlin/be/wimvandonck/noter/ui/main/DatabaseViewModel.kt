@@ -35,6 +35,8 @@ import be.wimvandonck.noter.logic.QuickChip
 import be.wimvandonck.noter.logic.QuickChoice
 import be.wimvandonck.noter.logic.QuickFilters
 import kotlinx.serialization.json.JsonObject
+import be.wimvandonck.noter.logic.NewViewType
+import be.wimvandonck.noter.logic.ViewEdits
 import be.wimvandonck.noter.logic.DatabaseSetups
 import be.wimvandonck.noter.data.ViewStatus
 import be.wimvandonck.noter.data.store.ViewsCache
@@ -105,6 +107,15 @@ data class QuickChipState(
  * it, and what went wrong ([error]: see NotionErrors).
  */
 data class DatabaseEditState(val properties: List<PropertySchema>, val saving: Boolean = false, val error: String? = null)
+
+/**
+ * A dialog that changes the data source's Notion views: a new view, a new name for [view], or
+ * deleting [view] (it asks first). [busy] while Notion is asked, [error] when it refused (see
+ * NotionErrors). Online only: Notion makes the change at once.
+ */
+data class ViewEditState(val kind: Kind, val view: NotionView? = null, val busy: Boolean = false, val error: String? = null) {
+    enum class Kind { NEW, RENAME, DELETE }
+}
 
 /** What quick actions can choose from (#119): people, and pages of related databases by database ID. */
 data class QuickLookups(
@@ -344,6 +355,72 @@ class DatabaseViewModel(
         viewModelScope.launch {
             repository.chooseView(id, viewId)
             openViews(id)
+        }
+    }
+
+    private val _viewEdit = MutableStateFlow<ViewEditState?>(null)
+
+    /** The dialog that changes a Notion view (null: closed). */
+    val viewEdit: StateFlow<ViewEditState?> get() = _viewEdit
+
+    fun openNewView() {
+        _viewEdit.value = ViewEditState(ViewEditState.Kind.NEW)
+    }
+
+    fun openRenameView(view: NotionView) {
+        _viewEdit.value = ViewEditState(ViewEditState.Kind.RENAME, view)
+    }
+
+    fun openDeleteView(view: NotionView) {
+        if (ViewEdits.canDelete(state.value.views)) _viewEdit.value = ViewEditState(ViewEditState.Kind.DELETE, view)
+    }
+
+    fun dismissViewEdit() {
+        if (_viewEdit.value?.busy != true) _viewEdit.value = null
+    }
+
+    /** Adds a view named [name] of [type] in Notion and shows it; the dialog stays open with the error when Notion refuses. */
+    fun createView(name: String, type: NewViewType) {
+        val open = _viewEdit.value ?: return
+        if (open.busy || open.kind != ViewEditState.Kind.NEW || !ViewEdits.validName(name)) return
+        changeViews(open) { id ->
+            val viewId = repository.createView(id, name, type)
+            repository.chooseView(id, viewId)
+        }
+    }
+
+    /** Renames the dialog's view to [name] in Notion. */
+    fun renameView(name: String) {
+        val open = _viewEdit.value ?: return
+        val view = open.view ?: return
+        if (open.busy || open.kind != ViewEditState.Kind.RENAME || !ViewEdits.validName(name)) return
+        if (!ViewEdits.renames(view.name, name)) {
+            _viewEdit.value = null
+            return
+        }
+        changeViews(open) { id -> repository.renameView(id, view.id, name) }
+    }
+
+    /** Deletes the dialog's view in Notion (after the user said yes). */
+    fun deleteView() {
+        val open = _viewEdit.value ?: return
+        val view = open.view ?: return
+        if (open.busy || open.kind != ViewEditState.Kind.DELETE) return
+        changeViews(open) { id -> repository.deleteView(id, view.id) }
+    }
+
+    /** Runs [change] on the data source shown, then closes the dialog and asks Notion for the views again. */
+    private fun changeViews(open: ViewEditState, change: suspend (sourceId: String) -> Unit) {
+        val id = sourceId
+        _viewEdit.value = open.copy(busy = true, error = null)
+        viewModelScope.launch {
+            try {
+                change(id)
+                _viewEdit.value = null
+                launch { openViews(id, force = true) }
+            } catch (e: NotionException) {
+                _viewEdit.value = open.copy(busy = false, error = NotionErrors.of(e))
+            }
         }
     }
 

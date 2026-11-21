@@ -797,6 +797,61 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun `views are made, renamed and deleted in Notion, and the views here follow`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path == "/data_sources/db" ->
+                    200 to """{"object":"data_source","id":"db","parent":{"type":"database_id","database_id":"dbase"},"title":[],"properties":{}}"""
+                sent.path.startsWith("/views?database_id=dbase") -> 200 to FakeNotion.list("""{"object":"view","id":"v1"}""")
+                sent.path == "/views/v1" && sent.method == "GET" -> 200 to """{"object":"view","id":"v1","name":"All","type":"table","data_source_id":"db"}"""
+                // Notion's answer may leave out what was asked.
+                sent.method == "POST" && sent.path == "/views" -> 200 to """{"object":"view","id":"v9"}"""
+                else -> 200 to """{"object":"view","id":"v1"}"""
+            }
+        }
+        val repo = repository()
+        repo.openViews("db")
+
+        val id = repo.createView("db", " Reading ", be.wimvandonck.noter.logic.NewViewType.LIST)
+        assertEquals("v9", id)
+        val create = notion.requests.single { it.method == "POST" && it.path == "/views" }
+        assertEquals(
+            Json.parseToJsonElement("""{"database_id":"dbase","data_source_id":"db","name":"Reading","type":"list"}"""),
+            Json.parseToJsonElement(create.body),
+        )
+        val added = repo.views.value["db"]!!.views.last()
+        assertEquals(listOf("v9", "Reading", "list", "db"), listOf(added.id, added.name, added.type, added.dataSourceId))
+
+        repo.renameView("db", "v1", "Everything ")
+        val rename = notion.requests.single { it.method == "PATCH" }
+        assertEquals("/views/v1", rename.path)
+        assertEquals(Json.parseToJsonElement("""{"name":"Everything"}"""), Json.parseToJsonElement(rename.body))
+        assertEquals("Everything", repo.views.value["db"]!!.views.first().name)
+
+        repo.deleteView("db", "v9")
+        assertEquals("/views/v9", notion.requests.single { it.method == "DELETE" }.path)
+        assertEquals(listOf("v1"), repo.views.value["db"]!!.views.map { it.id })
+    }
+
+    @Test
+    fun `a view Notion won't delete stays`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path == "/data_sources/db" ->
+                    200 to """{"object":"data_source","id":"db","parent":{"type":"database_id","database_id":"dbase"},"title":[],"properties":{}}"""
+                sent.path.startsWith("/views?database_id=dbase") -> 200 to FakeNotion.list("""{"object":"view","id":"v1"}""")
+                sent.method == "DELETE" -> 400 to """{"object":"error","status":400,"code":"validation_error","message":"Can't delete the last view"}"""
+                else -> 200 to """{"object":"view","id":"v1","name":"All","type":"table","data_source_id":"db"}"""
+            }
+        }
+        val repo = repository()
+        repo.openViews("db")
+        val error = runCatching { repo.deleteView("db", "v1") }.exceptionOrNull()
+        assertTrue(error.toString(), error is be.wimvandonck.noter.data.api.NotionException && error.status == 400)
+        assertEquals(listOf("v1"), repo.views.value["db"]!!.views.map { it.id })
+    }
+
+    @Test
     fun `the view shown is kept per data source`() = runBlocking {
         val settings = newSettings()
         val repo = repository(settings = settings)

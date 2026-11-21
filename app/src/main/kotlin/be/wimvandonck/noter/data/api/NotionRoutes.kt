@@ -11,12 +11,17 @@ object NotionRoutes {
     private val viewsOf = Regex("^/views\\?(?:.*&)?(?:data_source_id|database_id)=([^&]+)")
 
     /**
-     * The object a request is about: the ID in the path, or for a new page the parent's ID.
-     * Null for requests about the whole workspace (search, users, a page at the top).
+     * The object a request is about: the ID in the path, for a new page the parent's ID, and for a
+     * new view its database. Null for requests about the whole workspace (search, users, a page at
+     * the top).
      */
     fun subjectId(endpoint: String, body: Any?): String? {
         subject.find(endpoint)?.let { return it.groupValues[2] }
         viewsOf.find(endpoint)?.let { return it.groupValues[1] }
+        if (endpoint == "/views") {
+            val fields = body as? Map<*, *> ?: return null
+            return (fields["database_id"] ?: fields["data_source_id"]) as? String
+        }
         val parent = (body as? Map<*, *>)?.get("parent") as? Map<*, *> ?: return null
         return (parent["page_id"] ?: parent["data_source_id"] ?: parent["database_id"]) as? String
     }
