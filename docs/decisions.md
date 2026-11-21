@@ -2,6 +2,17 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Move to… for pages, notes and databases, sent at once
+
+A page's or database's ⋮ menu has "Move to…", a sheet that lists Home's databases and pages in the
+item's own workspace, with a search field. A page or note goes to a database's data source or a
+page (`POST /pages/{id}/move`), a database to a page or the top of the workspace (`PATCH
+/databases/{id}` with `parent`). Notion's page move has no workspace parent, so a page can't go to
+the top. Like Edit database nothing is queued: a move changes where things are for everyone, and a
+queued one could land after the destination was deleted; a failure shows in the sheet. Only places
+the phone already knows are offered (no extra requests), so a page that Home hasn't listed can't be
+chosen. Rejected: moving across workspaces (Notion can't).
+
 ## 2026-11-21: Options in Edit database, and a status' default
 
 Edit database now opens the options of a select, multi-select or status property (a chevron on its

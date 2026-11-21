@@ -37,6 +37,10 @@ import kotlinx.serialization.json.JsonObject
 import be.wimvandonck.noter.logic.DatabaseSetups
 import be.wimvandonck.noter.data.ViewStatus
 import be.wimvandonck.noter.data.store.ViewsCache
+import be.wimvandonck.noter.logic.Workspace
+import be.wimvandonck.noter.logic.Workspaces
+import be.wimvandonck.noter.ui.common.MoveController
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -120,6 +124,8 @@ class DatabaseViewModel(
     private val openedId: String,
     private val repository: NotesRepository,
     hasKey: StateFlow<Boolean>,
+    /** Every workspace with a token, for "Move to…". */
+    workspaces: Flow<List<Workspace>>,
 ) : ViewModel() {
     private val source = MutableStateFlow(openedId)
 
@@ -374,6 +380,14 @@ class DatabaseViewModel(
 
     private val _editing = MutableStateFlow<DatabaseEditState?>(null)
 
+    /** "Move to…" in ⋮: the database goes into a page or to the top of the workspace. */
+    val move = MoveController(viewModelScope, repository, workspaces)
+
+    fun openMove() {
+        val ui = state.value
+        move.openDatabase(databaseLink.value, sourceId, ui.title)
+    }
+
     /** Edit database while it is open (null: closed). */
     val editing: StateFlow<DatabaseEditState?> get() = _editing
 
@@ -471,7 +485,12 @@ class DatabaseViewModel(
         fun factory(databaseId: String) = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as NoterApp
-                DatabaseViewModel(databaseId, app.repository, app.apiKeyStore.hasKey)
+                DatabaseViewModel(
+                    databaseId,
+                    app.repository,
+                    app.apiKeyStore.hasKey,
+                    combine(app.apiKeyStore.main, app.apiKeyStore.extras) { main, extras -> Workspaces.of(listOf(main) + extras) },
+                )
             }
         }
     }

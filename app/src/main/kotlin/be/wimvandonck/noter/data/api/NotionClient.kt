@@ -405,6 +405,16 @@ class NotionClient(
     /** Changes database [databaseId]'s name or icon ([body], see DatabaseEdit). */
     suspend fun updateDatabase(databaseId: String, body: Map<String, Any?>): JsonObject = call("PATCH", "/databases/$databaseId", body)
 
+    /**
+     * Moves page [pageId] into a page or a database's data source ([parent], see MoveDestination:
+     * `{type: page_id, page_id}` or `{type: data_source_id, data_source_id}`; Notion has no
+     * workspace parent for a page here).
+     */
+    suspend fun movePage(pageId: String, parent: Map<String, Any?>): JsonObject = call("POST", "/pages/$pageId/move", mapOf("parent" to parent))
+
+    /** Moves database [databaseId] into a page or to the top of the workspace ([parent], see MoveDestination). */
+    suspend fun moveDatabase(databaseId: String, parent: Map<String, Any?>): JsonObject = call("PATCH", "/databases/$databaseId", mapOf("parent" to parent))
+
     /** Changes data source [dataSourceId]'s name or icon ([body], see DatabaseEdit). */
     suspend fun updateDataSource(dataSourceId: String, body: Map<String, Any?>): JsonObject = call("PATCH", "/data_sources/$dataSourceId", body)
 

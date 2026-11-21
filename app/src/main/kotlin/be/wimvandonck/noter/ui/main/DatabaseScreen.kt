@@ -62,7 +62,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import be.wimvandonck.noter.R
+import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalResources
+import be.wimvandonck.noter.ui.common.MoveSheet
 import be.wimvandonck.noter.ui.common.PageIconView
+import be.wimvandonck.noter.ui.common.movedName
+import kotlinx.coroutines.launch
 import be.wimvandonck.noter.ui.common.SMALL_PAGE_ICON
 import be.wimvandonck.noter.ui.common.SyncButton
 import be.wimvandonck.noter.ui.theme.AppShapes
@@ -202,6 +208,14 @@ fun DatabaseScreen(
                                         }
                                         if (content.hasKey && !content.sourceMissing) {
                                             DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.action_move_to)) },
+                                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, contentDescription = null) },
+                                                onClick = {
+                                                    menu = false
+                                                    viewModel.openMove()
+                                                },
+                                            )
+                                            DropdownMenuItem(
                                                 text = { Text(stringResource(R.string.quick_actions)) },
                                                 leadingIcon = { Icon(Icons.Rounded.Bolt, contentDescription = null) },
                                                 onClick = {
@@ -317,6 +331,21 @@ fun DatabaseScreen(
             onSave = viewModel::saveEdit,
             onOpenInNotion = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, state.notionUrl.toUri())) } },
             onDismiss = viewModel::dismissEdit,
+        )
+    }
+    val moving by viewModel.move.state.collectAsStateWithLifecycle()
+    val resources = LocalResources.current
+    val moveScope = rememberCoroutineScope()
+    moving?.let { sheet ->
+        MoveSheet(
+            state = sheet,
+            onSearch = viewModel.move::search,
+            onPick = { destination ->
+                viewModel.move.move(destination) { moved ->
+                    moveScope.launch { snackbar.showSnackbar(resources.getString(R.string.moved_to, movedName(resources, moved))) }
+                }
+            },
+            onDismiss = viewModel.move::dismiss,
         )
     }
     if (quickActionsOpen) QuickActionsFlow(viewModel, onDismiss = { quickActionsOpen = false })
