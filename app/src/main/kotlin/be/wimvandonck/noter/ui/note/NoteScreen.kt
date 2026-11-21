@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.material.icons.automirrored.rounded.FormatIndentDecrease
 import androidx.compose.material.icons.automirrored.rounded.NoteAdd
 import androidx.compose.material.icons.automirrored.rounded.FormatIndentIncrease
@@ -113,7 +114,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import be.wimvandonck.noter.ui.common.MoveSheet
 import be.wimvandonck.noter.ui.common.NotionImage
+import be.wimvandonck.noter.ui.common.movedName
 import be.wimvandonck.noter.ui.common.PageIconView
 import be.wimvandonck.noter.ui.common.SMALL_PAGE_ICON
 import androidx.core.net.toUri
@@ -324,6 +327,20 @@ fun NoteScreen(
         )
     }
 
+    val moving by viewModel.move.state.collectAsStateWithLifecycle()
+    moving?.let { sheet ->
+        MoveSheet(
+            state = sheet,
+            onSearch = viewModel.move::search,
+            onPick = { destination ->
+                viewModel.move.move(destination) { moved ->
+                    noteScope.launch { snackbar.showSnackbar(resources.getString(R.string.moved_to, movedName(resources, moved))) }
+                }
+            },
+            onDismiss = viewModel.move::dismiss,
+        )
+    }
+
     quickActionsFor?.let { databaseId ->
         NoteQuickActions(databaseId, snackbar, noteScope, onDismiss = { quickActionsFor = null })
     }
@@ -435,6 +452,17 @@ fun NoteScreen(
                                         onClick = {
                                             menu = false
                                             quickActionsFor = note.databaseId
+                                        },
+                                    )
+                                }
+                                // Notion only moves a page it already has.
+                                if (!note.isLocal) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_move_to)) },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null) },
+                                        onClick = {
+                                            menu = false
+                                            viewModel.openMove()
                                         },
                                     )
                                 }

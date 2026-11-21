@@ -287,6 +287,13 @@
     <string name="view_settings">View settings</string>
     <string name="edit_views_in_notion">Edit views in Notion</string>
     <string name="more_in_notion">More options in Notion</string>
+    <string name="action_move_to">Move to…</string>
+    <string name="move_kind_page">Page</string>
+    <string name="move_kind_database">Database</string>
+    <string name="move_hint_properties">In a database, properties it doesn’t have may be lost.</string>
+    <string name="move_nowhere">No pages or databases to move to.</string>
+    <string name="moved_to">Moved to %1$s</string>
+    <string name="move_failed">Notion didn’t move it: %1$s</string>
     <string name="options_of">Options of %1$s</string>
     <string name="option_add">Add option</string>
     <string name="option_name">Option name</string>

@@ -18,6 +18,7 @@ import be.wimvandonck.noter.data.model.PageRef
 import be.wimvandonck.noter.data.model.PropertyEdit
 import be.wimvandonck.noter.data.model.PropertyLayout
 import be.wimvandonck.noter.data.model.QuickAction
+import be.wimvandonck.noter.data.notion.InlineMarkdown
 import be.wimvandonck.noter.data.notion.PropertyCodec
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.sync.SaveTiming
@@ -32,6 +33,10 @@ import be.wimvandonck.noter.logic.PropertyLayouts
 import be.wimvandonck.noter.logic.QuickActions
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import be.wimvandonck.noter.logic.Workspace
+import be.wimvandonck.noter.logic.Workspaces
+import be.wimvandonck.noter.ui.common.MoveController
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -78,6 +83,8 @@ data class NoteUiState(
 class NoteViewModel(
     private val pageId: String,
     private val repository: NotesRepository,
+    /** Every workspace with a token, for "Move to…". */
+    workspaces: Flow<List<Workspace>>,
 ) : ViewModel() {
     private val editor = DocumentEditor()
     private val blocks = MutableStateFlow<List<Block>>(emptyList())
@@ -364,6 +371,11 @@ class NoteViewModel(
     /** Sets the page's icon to [emoji], or removes it when that is null. */
     fun setIcon(emoji: String?) = viewModelScope.launch { repository.setIcon(pageId, emoji) }
 
+    /** "Move to…" in ⋮: the page or note goes into another page or database. */
+    val move = MoveController(viewModelScope, repository, workspaces)
+
+    fun openMove() = move.openPage(pageId, state.value.note?.title?.let(InlineMarkdown::stripped).orEmpty())
+
     /** The New database dialog (#71): a database inside this page. */
     val newDatabase = DatabaseCreation(viewModelScope, repository)
 
@@ -444,7 +456,11 @@ class NoteViewModel(
         fun factory(pageId: String) = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as NoterApp
-                NoteViewModel(pageId, app.repository)
+                NoteViewModel(
+                    pageId,
+                    app.repository,
+                    combine(app.apiKeyStore.main, app.apiKeyStore.extras) { main, extras -> Workspaces.of(listOf(main) + extras) },
+                )
             }
         }
     }

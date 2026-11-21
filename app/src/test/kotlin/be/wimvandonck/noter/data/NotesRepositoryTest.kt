@@ -2,6 +2,8 @@ package be.wimvandonck.noter.data
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import be.wimvandonck.noter.data.api.NotionClient
+import be.wimvandonck.noter.data.api.NotionException
+import be.wimvandonck.noter.logic.MoveDestination
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
 import be.wimvandonck.noter.data.model.DatabaseSchema
@@ -907,5 +909,102 @@ class NotesRepositoryTest {
 
         assertEquals(1, notion.requests.count { it.method == "PATCH" && it.path == "/blocks/page-1/children" })
         assertEquals(listOf("Call Sam"), repo.cachedContent("page-1")?.blocks?.map { it.text })
+    }
+
+    private val movedPage = """{"object":"page","id":"page-1","parent":{"type":"page_id","page_id":"target"},
+        "properties":{"title":{"id":"title","type":"title","title":[{"type":"text","plain_text":"List","text":{"content":"List"},"annotations":{}}]}}}"""
+
+    @Test
+    fun `a note moved to a page is sent at once and is a page on its own afterwards`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list(FakeNotion.page("page-1", "db", "List"))
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.method == "POST" && sent.path == "/pages/page-1/move" -> 200 to "{}"
+                sent.path == "/pages/page-1" -> 200 to movedPage
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+
+        repo.moveNote("page-1", MoveDestination("target", "Target", null, MoveDestination.Kind.PAGE))
+
+        val move = notion.requests.single { it.path == "/pages/page-1/move" }
+        assertEquals("""{"parent":{"type":"page_id","page_id":"target"}}""", move.body)
+        assertEquals(NotesRepository.PAGES, repo.note("page-1").first()?.databaseId)
+        assertEquals(emptyList<String>(), repo.databases.value["db"]?.notes?.map { it.id })
+    }
+
+    @Test
+    fun `a note moved into a database is a note of its data source, and Home's list no longer shows it`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list()
+                sent.path.startsWith("/data_sources/other/query") -> 200 to FakeNotion.list()
+                sent.path.startsWith("/data_sources/other") -> 200 to FakeNotion.database("other")
+                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list(
+                    """{"object":"page","id":"page-1","parent":{"type":"workspace","workspace":true},"properties":{"title":{"id":"title","type":"title","title":[{"plain_text":"List"}]}}}""",
+                )
+                sent.method == "POST" && sent.path == "/pages/page-1/move" -> 200 to "{}"
+                sent.path == "/pages/page-1" -> 200 to FakeNotion.page("page-1", "other", "List")
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refreshRecent()
+        repo.openPage("page-1")
+        assertEquals(listOf("page-1"), repo.recent.value?.map { it.id })
+
+        repo.moveNote("page-1", MoveDestination("other", "Other", null, MoveDestination.Kind.DATA_SOURCE))
+
+        assertEquals("""{"parent":{"type":"data_source_id","data_source_id":"other"}}""", notion.requests.single { it.path == "/pages/page-1/move" }.body)
+        assertEquals("other", repo.note("page-1").first()?.databaseId)
+        assertEquals(emptyList<String>(), repo.recent.value?.map { it.id })
+    }
+
+    @Test
+    fun `a move Notion refuses leaves the note where it was`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list(FakeNotion.page("page-1", "db", "List"))
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.path == "/pages/page-1/move" -> 400 to """{"object":"error","status":400,"code":"validation_error","message":"Can't move"}"""
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+
+        val error = runCatching { repo.moveNote("page-1", MoveDestination("target", "Target", null, MoveDestination.Kind.PAGE)) }.exceptionOrNull()
+
+        assertTrue(error.toString(), error is NotionException)
+        assertEquals("db", repo.note("page-1").first()?.databaseId)
+    }
+
+    @Test
+    fun `a database moved to a page or the top is sent as its new parent, and Home's tree follows`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list(
+                    """{"object":"data_source","id":"ds-1","title":[{"plain_text":"Tasks"}],"parent":{"type":"database_id","database_id":"db-1"}}""",
+                )
+                sent.path == "/databases/db-1" && sent.method == "GET" ->
+                    200 to """{"object":"database","id":"db-1","title":[{"plain_text":"Tasks"}],"parent":{"type":"workspace","workspace":true},"data_sources":[{"id":"ds-1","name":"Tasks"}]}"""
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refreshRecent()
+
+        repo.moveDatabase("db-1", "ds-1", MoveDestination("p-1", "Journal", null, MoveDestination.Kind.PAGE))
+        assertEquals("""{"parent":{"type":"page_id","page_id":"p-1"}}""", notion.requests.last { it.method == "PATCH" }.body)
+        assertEquals("p-1", repo.recent.value?.single()?.parentId)
+
+        repo.moveDatabase("db-1", "ds-1", MoveDestination("", "", null, MoveDestination.Kind.WORKSPACE_TOP))
+        val patch = notion.requests.last { it.method == "PATCH" }
+        assertEquals("/databases/db-1", patch.path)
+        assertEquals("""{"parent":{"type":"workspace","workspace":true}}""", patch.body)
+        assertEquals(null, repo.recent.value?.single()?.parentId)
     }
 }

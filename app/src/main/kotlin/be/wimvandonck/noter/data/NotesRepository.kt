@@ -32,6 +32,8 @@ import be.wimvandonck.noter.logic.DatabaseEdit
 import be.wimvandonck.noter.logic.SchemaChange
 import be.wimvandonck.noter.logic.HiddenOnHome
 import be.wimvandonck.noter.logic.HomeLevels
+import be.wimvandonck.noter.logic.MoveDestination
+import be.wimvandonck.noter.logic.MoveTargets
 import be.wimvandonck.noter.logic.SharedNotes
 import be.wimvandonck.noter.logic.SubpageTitles
 import be.wimvandonck.noter.logic.WebArticles
@@ -1744,6 +1746,72 @@ class NotesRepository(
         settings.update { s ->
             val pins = edit.applyToPins(s.pinnedDatabases, ids)
             if (pins == s.pinnedDatabases) s else s.copy(pinnedDatabases = pins)
+        }
+    }
+
+    /**
+     * Moves the page or note [pageId] to [to] (a page, or another database's data source) in Notion
+     * at once (nothing is queued, like Edit database), after sending what is waiting for it. Then
+     * the copy on this phone is where Notion has it now, as a note of the new database or a page on
+     * its own, and Home's list follows. Throws when Notion can't be reached or refuses (the note
+     * stays where it was).
+     */
+    suspend fun moveNote(pageId: String, to: MoveDestination) {
+        val id = resolve(pageId)
+        if (id.startsWith(NoteSummary.LOCAL_PREFIX)) throw NotionException("Not in Notion yet")
+        flush()
+        val page = withContext(Dispatchers.IO) {
+            client.movePage(id, to.parentBody())
+            client.getPage(id)
+        }
+        val key = if (to.kind == MoveDestination.Kind.DATA_SOURCE) to.id else PAGES
+        val moved = PropertyCodec.parsePage(page, key)
+        loadDatabase(key)
+        withContext(Dispatchers.IO) {
+            lock.withLock {
+                val before = findNote(_databases.value, id)
+                before?.databaseId?.takeIf { it != key }?.let { old ->
+                    setState(old) { db -> db.copy(notes = db.notes.filterNot { it.id == id }) }
+                    _databases.value[old]?.let { saveDatabaseCache(old, it) }
+                }
+                (moved ?: before?.copy(databaseId = key))?.let { fresh ->
+                    val note = Outbox.applyPending(fresh, _outbox.value)
+                    setState(key) { db -> db.copy(notes = listOf(note) + db.notes.filterNot { it.id == id }, loaded = true) }
+                    _databases.value[key]?.let { saveDatabaseCache(key, it) }
+                }
+                keepMoved(setOf(id), to)
+            }
+        }
+        if (key != PAGES) scope.launch { runCatching { refresh(key, userAsked = false) } }
+    }
+
+    /**
+     * Moves database [databaseId] (null: asked from Notion, from [sourceId]) to [to] (a page or the
+     * top of the workspace) in Notion at once, then Home's list and what is kept about it follow.
+     * Throws when Notion can't be reached or refuses.
+     */
+    suspend fun moveDatabase(databaseId: String?, sourceId: String, to: MoveDestination) {
+        val database = databaseId ?: databaseOf(sourceId) ?: throw NotionException("Database not known")
+        withContext(Dispatchers.IO) { client.moveDatabase(database, to.parentBody()) }
+        withContext(Dispatchers.IO) {
+            lock.withLock {
+                val newParent = to.id.takeIf { to.kind == MoveDestination.Kind.PAGE }
+                databaseInfos[plain(database)]?.let { info ->
+                    databaseInfos[plain(database)] = info.copy(parentId = newParent)
+                    cache.saveDatabaseInfos(databaseInfos.toMap())
+                }
+                keepMoved(setOf(plain(database), plain(sourceId)), to)
+            }
+        }
+    }
+
+    /** Home's list and the last search after [ids] moved to [to]. Called with the lock held. */
+    private fun keepMoved(ids: Set<String>, to: MoveDestination) {
+        lastFound = MoveTargets.afterMove(lastFound, ids, to)
+        _recent.value?.let { items ->
+            val changed = MoveTargets.afterMove(items, ids, to)
+            _recent.value = changed
+            cache.saveRecent(changed)
         }
     }
 
