@@ -77,11 +77,14 @@ class QuickFiltersTest {
     }
 
     @Test
-    fun `a chip turned on that the view no longer has is dropped`() {
-        val on = mapOf("p1" to obj("""{"status":{"equals":"Done"}}"""), "p3" to QuickFilters.person("u1"))
-        val applied = QuickFilters.applicable(on, view("""{"p1":{}}"""), schema)
-        assertEquals(setOf("p1"), applied.keys)
-        assertEquals(emptyMap<String, JsonObject>(), QuickFilters.applicable(emptyMap(), null, null))
+    fun `chips with a saved value start on, the others off, and a change this session wins`() {
+        val v = view("""{"p1":{"status":{"equals":"Todo"}},"p3":{},"p4":{"checkbox":{"equals":true}}}""")
+        val done = QuickFilters.option("status", "Done")
+        assertEquals(mapOf("p1" to obj("""{"status":{"equals":"Todo"}}"""), "p4" to obj("""{"checkbox":{"equals":true}}""")), QuickFilters.on(v, schema))
+        // Turned off, another value on, a chip without a value on, and one the view no longer has.
+        val changes = mapOf("p4" to QuickFilters.OFF, "p1" to done, "p3" to QuickFilters.person("u1"), "gone" to done)
+        assertEquals(mapOf("p1" to done, "p3" to QuickFilters.person("u1")), QuickFilters.on(v, schema, changes))
+        assertEquals(emptyMap<String, JsonObject>(), QuickFilters.on(null, null, changes))
     }
 
     @Test

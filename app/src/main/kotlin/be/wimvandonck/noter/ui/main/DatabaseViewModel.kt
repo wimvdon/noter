@@ -123,7 +123,7 @@ class DatabaseViewModel(
 ) : ViewModel() {
     private val source = MutableStateFlow(openedId)
 
-    /** The quick filters that are on, as conditions by chip, per "data source/view" while the app runs (never kept). */
+    /** What the user changed in the quick filters, per "data source/view" while the app runs (never kept): a condition turns a chip on, QuickFilters.OFF turns it off. */
     private val active = MutableStateFlow<Map<String, Map<String, JsonObject>>>(emptyMap())
 
     /** The person the sign-in acts as, once a chip needed them. */
@@ -163,7 +163,7 @@ class DatabaseViewModel(
         val listStatus = views.status[id]
         val (activeAll, person) = picked
         val chipList = QuickFilters.chips(viewShown, db?.schema)
-        val quick = viewId?.let { QuickFilters.applicable(activeAll["$id/$it"].orEmpty(), viewShown, db?.schema) }.orEmpty()
+        val quick = viewId?.let { QuickFilters.on(viewShown, db?.schema, activeAll["$id/$it"].orEmpty()) }.orEmpty()
         // Offline, the notes with these chips on aren't on the phone: the view's own notes show, chips off.
         val unfiltered = offline && viewId != null && quick.isNotEmpty() && sourceViews?.results?.containsKey(NotionViews.resultKey(viewId, quick)) != true
         val on = if (unfiltered) emptyMap() else quick
@@ -291,11 +291,11 @@ class DatabaseViewModel(
         val chosen = NotionViews.chosen(choiceOf(settings, id), shown) ?: return
         if (choiceOf(settings, id) != chosen) repository.chooseView(id, chosen)
         val view = shown.firstOrNull { it.id == chosen }
-        val quick = QuickFilters.applicable(active.value["$id/$chosen"].orEmpty(), view, repository.databases.value[id]?.schema)
+        val quick = QuickFilters.on(view, repository.databases.value[id]?.schema, active.value["$id/$chosen"].orEmpty())
         repository.refreshViewResults(id, chosen, forceResults, quick)
     }
 
-    /** Taps chip [chip]: it goes off when it is on, else on with the condition it holds (chips without one use [chooseValue]). */
+    /** Taps chip [chip]: it goes off when it is on (for this session), else on with the condition it holds (chips without one use [chooseValue]). */
     fun toggleChip(chip: QuickChip) {
         if (state.value.chips.firstOrNull { it.chip.key == chip.key }?.on == true) setChip(chip.key, null) else chip.preset?.let { setChip(chip.key, it) }
     }
@@ -317,9 +317,9 @@ class DatabaseViewModel(
         val viewId = ui.viewId ?: return
         val id = ui.sourceId
         val slot = "$id/$viewId"
-        val next = active.value[slot].orEmpty().let { if (condition == null) it - key else it + (key to condition) }
+        val next = active.value[slot].orEmpty() + (key to (condition ?: QuickFilters.OFF))
         active.update { it + (slot to next) }
-        val quick = QuickFilters.applicable(next, ui.views.firstOrNull { it.id == viewId }, schema())
+        val quick = QuickFilters.on(ui.views.firstOrNull { it.id == viewId }, schema(), next)
         viewModelScope.launch { repository.refreshViewResults(id, viewId, false, quick) }
     }
 

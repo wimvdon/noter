@@ -82,12 +82,25 @@ object QuickFilters {
     /** The condition "includes person [userId]". */
     fun person(userId: String): JsonObject = JsonObject(mapOf("people" to JsonObject(mapOf("contains" to JsonPrimitive(userId)))))
 
-    /** What of [active] (conditions by chip key) still has a chip in [view]: a view changed in Notion can drop one. */
-    fun applicable(active: Map<String, JsonObject>, view: NotionView?, schema: DatabaseSchema?): Map<String, JsonObject> {
-        if (active.isEmpty()) return active
-        val keys = chips(view, schema).map { it.key }.toSet()
-        return active.filterKeys { it in keys }
+    /**
+     * The conditions of the chips that are on, by chip key: as Notion opens the view, the chips with
+     * a saved value are on and the others off, then what the user changed this session
+     * ([changes]: a condition turns a chip on with it, an empty one turns it off). A change for a
+     * chip the view no longer has is dropped.
+     */
+    fun on(view: NotionView?, schema: DatabaseSchema?, changes: Map<String, JsonObject> = emptyMap()): Map<String, JsonObject> {
+        val chips = chips(view, schema)
+        val result = LinkedHashMap<String, JsonObject>()
+        chips.forEach { chip -> chip.preset?.let { result[chip.key] = it } }
+        chips.forEach { chip ->
+            val change = changes[chip.key] ?: return@forEach
+            if (change.isEmpty()) result.remove(chip.key) else result[chip.key] = change
+        }
+        return result
     }
+
+    /** The change that turns a chip off (see [on]). */
+    val OFF = JsonObject(emptyMap())
 
     /** True when [condition] asks for a checked checkbox, false for an unchecked one, null for neither. */
     fun checked(condition: JsonObject?): Boolean? =

@@ -55,10 +55,11 @@ narrow), and copying Notion's card size and layout (not worth the settings it wo
 ## 2026-11-21: A view's quick filters are chips under the tabs
 
 A view's quick filters (Notion's pinned filter pills) show as a row of chips below the view tabs.
-They start off, so a view opens as its filter says (before, every quick filter with a value was
-always added to the query, with no way to turn it off). A tap turns one on and the view's notes
-are asked again with its condition added to the view's filter; a chip without a value opens a small
-menu for select, status, multi-select, checkbox and people ("Me") values. Which chips are on is
+As in Notion, a chip with a saved value starts on, so the view opens exactly as it does there
+(before, such quick filters were always added to the query, with no way to turn them off); chips
+without a value start off. A tap turns one off or on for this session and the view's notes are
+asked again with the conditions that are on added to the view's filter; a chip without a value opens a small
+menu for select, status, multi-select, checkbox and people ("Me") values. What the user changed is
 kept per view while the app runs, not stored or backed up. The notes of each combination are
 cached like a view's own, so turning a chip off or on again shows them at once. Offline the chips
 are disabled and the view's cached notes show: Notion's conditions aren't redone on the phone.
