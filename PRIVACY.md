@@ -45,7 +45,7 @@ crash reporting.
   of the workspace, and during a sign-in a one-time key to open what the helper sends back. They
   are never included in a backup.
 - **A copy of your notes** (titles, properties and content of the notes and pages you have seen),
-  the list of databases and pages Home shows (their names and icons), the views of the databases you opened (their names, filters and sorts, and which notes they showed), which workspace each page and
+  the list of databases and pages Home shows (their names and icons), the views of the databases you opened (their names, filters and sorts, and which notes they showed), the custom emojis of your workspace (names and image links), which workspace each page and
   database is in (marked with a short code made from the token, not the token itself), and the list of changes that
   still have to be sent to Notion, so the app opens instantly and works offline. This copy is
   never included in a backup; Notion is the real copy.

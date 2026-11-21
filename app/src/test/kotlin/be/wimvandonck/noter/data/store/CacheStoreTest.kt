@@ -38,6 +38,15 @@ class CacheStoreTest {
     }
 
     @Test
+    fun `custom emojis are kept per workspace`() {
+        val store = CacheStore(folder.newFolder("cache"))
+        val bufo = be.wimvandonck.noter.data.model.CustomEmoji("45ce", "bufo", "https://x/b.png")
+        store.saveCustomEmojis("w1", be.wimvandonck.noter.data.model.CustomEmojisCache(listOf(bufo), 7))
+        assertEquals(listOf(bufo), store.customEmojis("w1")!!.emojis)
+        assertNull(store.customEmojis("w2"))
+    }
+
+    @Test
     fun `missing or broken files read as nothing`() {
         val dir = folder.newFolder("cache")
         val store = CacheStore(dir)

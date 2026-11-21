@@ -10,6 +10,7 @@ import be.wimvandonck.noter.data.NotesRepository
 import be.wimvandonck.noter.data.api.NotionErrors
 import be.wimvandonck.noter.data.api.NotionException
 import be.wimvandonck.noter.data.model.CardLayout
+import be.wimvandonck.noter.data.model.CustomEmoji
 import be.wimvandonck.noter.data.model.DatabaseSchema
 import be.wimvandonck.noter.data.model.DatabaseSetup
 import be.wimvandonck.noter.data.model.NotionUser
@@ -405,11 +406,18 @@ class DatabaseViewModel(
      * database, and [properties] of the data source shown ([names]: Notion's name for a new
      * property of each kind). It closes when Notion took everything, else stays open with the error.
      */
-    fun saveEdit(title: String, emoji: String?, iconChanged: Boolean, properties: List<EditedProperty>, names: Map<PropertyKind, String>) {
+    fun saveEdit(
+        title: String,
+        emoji: String?,
+        custom: CustomEmoji?,
+        iconChanged: Boolean,
+        properties: List<EditedProperty>,
+        names: Map<PropertyKind, String>,
+    ) {
         val open = _editing.value ?: return
         if (open.saving || title.isBlank()) return
         val ui = state.value
-        val edit = DatabaseEdit(title = title.trim().takeIf { it != ui.title }, emoji = emoji, setsIcon = iconChanged)
+        val edit = DatabaseEdit(title = title.trim().takeIf { it != ui.title }, emoji = emoji, setsIcon = iconChanged, custom = custom)
         val change = SchemaEdits.change(open.properties, properties, names)
         _editing.value = open.copy(saving = true, error = null)
         viewModelScope.launch {
@@ -452,6 +460,16 @@ class DatabaseViewModel(
 
     /** The data source's properties as Notion describes them (null until known). */
     fun schema(): DatabaseSchema? = repository.databases.value[sourceId]?.schema
+
+    private val _customEmojis = MutableStateFlow<List<CustomEmoji>>(emptyList())
+
+    /** The workspace's custom emojis, for Edit database's icon sheet (after [loadCustomEmojis]). */
+    val customEmojis: StateFlow<List<CustomEmoji>> = _customEmojis
+
+    fun loadCustomEmojis() {
+        if (_customEmojis.value.isNotEmpty()) return
+        viewModelScope.launch { _customEmojis.value = repository.customEmojis(databaseLink.value ?: sourceId) }
+    }
 
     private val _quickLookups = MutableStateFlow(QuickLookups())
 

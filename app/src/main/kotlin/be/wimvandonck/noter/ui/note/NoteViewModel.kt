@@ -9,6 +9,7 @@ import be.wimvandonck.noter.NoterApp
 import be.wimvandonck.noter.data.NotesRepository
 import be.wimvandonck.noter.ui.common.DatabaseCreation
 import be.wimvandonck.noter.data.model.Block
+import be.wimvandonck.noter.data.model.CustomEmoji
 import be.wimvandonck.noter.data.model.BlockType
 import be.wimvandonck.noter.data.model.DatabaseSchema
 import be.wimvandonck.noter.data.model.NoteProperty
@@ -368,8 +369,18 @@ class NoteViewModel(
 
     fun togglePin() = viewModelScope.launch { repository.togglePin(pageId) }
 
-    /** Sets the page's icon to [emoji], or removes it when that is null. */
-    fun setIcon(emoji: String?) = viewModelScope.launch { repository.setIcon(pageId, emoji) }
+    /** Sets the page's icon to [emoji] or a custom emoji of the workspace, or removes it when both are null. */
+    fun setIcon(emoji: String?, custom: CustomEmoji? = null) = viewModelScope.launch { repository.setIcon(pageId, emoji, custom) }
+
+    private val _customEmojis = MutableStateFlow<List<CustomEmoji>>(emptyList())
+
+    /** The workspace's custom emojis, for the icon sheet (after [loadCustomEmojis]). */
+    val customEmojis: StateFlow<List<CustomEmoji>> = _customEmojis
+
+    fun loadCustomEmojis() {
+        if (_customEmojis.value.isNotEmpty()) return
+        viewModelScope.launch { _customEmojis.value = repository.customEmojis(repository.resolve(pageId)) }
+    }
 
     /** "Move to…" in ⋮: the page or note goes into another page or database. */
     val move = MoveController(viewModelScope, repository, workspaces)

@@ -631,6 +631,27 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun `the workspace's custom emojis are kept for a day, and what was kept is used when Notion can't be asked`() = runBlocking {
+        var failing = false
+        notion.respond = { sent ->
+            when {
+                failing -> 403 to """{"object":"error","status":403,"code":"restricted_resource","message":"x"}"""
+                sent.path.startsWith("/custom_emojis") ->
+                    200 to FakeNotion.list("""{"id":"2","name":"zebra","url":"https://x/2.png"}""", """{"id":"1","name":"Bufo","url":"https://x/1.png"}""")
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        assertEquals(listOf("Bufo", "zebra"), repo.customEmojis(null).map { it.name })
+        repo.customEmojis(null)
+        assertEquals(1, notion.requests.count { it.path.startsWith("/custom_emojis") })
+
+        repo.refreshLookups()
+        failing = true
+        assertEquals(listOf("Bufo", "zebra"), repo.customEmojis(null).map { it.name })
+    }
+
+    @Test
     fun `a database's Notion views are read, and a view's notes asked with its filter and sorts`() = runBlocking {
         notion.respond = { sent ->
             when {

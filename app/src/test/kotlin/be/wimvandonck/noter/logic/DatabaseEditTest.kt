@@ -1,5 +1,6 @@
 package be.wimvandonck.noter.logic
 
+import be.wimvandonck.noter.data.model.CustomEmoji
 import be.wimvandonck.noter.data.model.DatabaseInfo
 import be.wimvandonck.noter.data.model.PageIcon
 import be.wimvandonck.noter.data.model.PinnedDatabase
@@ -24,6 +25,14 @@ class DatabaseEditTest {
         val removed = DatabaseEdit.icon(null).body()
         assertEquals(setOf("icon"), removed.keys)
         assertEquals(null, removed["icon"])
+    }
+
+    @Test
+    fun `a custom emoji is sent as its ID and shown from its image`() {
+        val bufo = CustomEmoji("45ce", "bufo", "https://x/b.png")
+        val edit = DatabaseEdit.icon(null, bufo)
+        assertEquals(mapOf("icon" to mapOf("type" to "custom_emoji", "custom_emoji" to mapOf("id" to "45ce"))), edit.body())
+        assertEquals(PageIcon(url = "https://x/b.png", customEmojiId = "45ce"), edit.icon(star))
     }
 
     @Test

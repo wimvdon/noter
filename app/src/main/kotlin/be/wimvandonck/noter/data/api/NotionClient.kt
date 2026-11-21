@@ -1,6 +1,7 @@
 package be.wimvandonck.noter.data.api
 
 import be.wimvandonck.noter.data.model.PageRef
+import be.wimvandonck.noter.data.notion.IconCodec
 import be.wimvandonck.noter.data.notion.InlineMarkdown
 import be.wimvandonck.noter.logic.KeyRouter
 import be.wimvandonck.noter.logic.Workspaces
@@ -351,9 +352,10 @@ class NotionClient(
         children: List<Map<String, Any?>>,
         emoji: String? = null,
         /** A page template's request (see NoteTemplates.request); Notion allows no [children] with it. */
+        customEmojiId: String? = null,
         template: Map<String, Any?>? = null,
     ): JsonObject =
-        createPage(mapOf("type" to "data_source_id", "data_source_id" to dataSourceId), properties, children, emoji, template = template)
+        createPage(mapOf("type" to "data_source_id", "data_source_id" to dataSourceId), properties, children, emoji, customEmojiId, template = template)
 
     /**
      * Creates a page on its own: inside page [parentPageId], or at the top of [workspace] (the main
@@ -366,12 +368,14 @@ class NotionClient(
         emoji: String? = null,
         workspace: String? = null,
         children: List<Map<String, Any?>> = emptyList(),
+        customEmojiId: String? = null,
     ): JsonObject =
         createPage(
             if (parentPageId != null) mapOf("type" to "page_id", "page_id" to parentPageId) else mapOf("type" to "workspace", "workspace" to true),
             properties,
             children,
             emoji,
+            customEmojiId,
             key = if (parentPageId == null) workspace?.let(::keyOf) else null,
         )
 
@@ -380,6 +384,7 @@ class NotionClient(
         properties: Map<String, Any?>,
         children: List<Map<String, Any?>>,
         emoji: String?,
+        customEmojiId: String?,
         key: String? = null,
         template: Map<String, Any?>? = null,
     ): JsonObject =
@@ -388,7 +393,7 @@ class NotionClient(
             buildMap {
                 put("parent", parent)
                 put("properties", properties)
-                if (emoji != null) put("icon", emojiIcon(emoji))
+                IconCodec.request(emoji, customEmojiId)?.let { put("icon", it) }
                 if (template != null) {
                     put("template", template)
                 } else if (children.isNotEmpty()) {
@@ -409,9 +414,26 @@ class NotionClient(
         return call("POST", "/databases", body, key = if (atTop) workspace?.let(::keyOf) else null, adds = true)
     }
 
-    /** Sets the page's icon to [emoji], or removes it when that is null. */
-    suspend fun updatePageIcon(pageId: String, emoji: String?): JsonObject =
-        call("PATCH", "/pages/$pageId", mapOf("icon" to emoji?.let(::emojiIcon)))
+    /** Sets the page's icon to [emoji] or a custom emoji ([customEmojiId]), or removes it when both are null. */
+    suspend fun updatePageIcon(pageId: String, emoji: String?, customEmojiId: String? = null): JsonObject =
+        call("PATCH", "/pages/$pageId", mapOf("icon" to IconCodec.request(emoji, customEmojiId)))
+
+    /**
+     * The custom emojis of [workspace] ([Workspaces.id]; the main one when null or no longer there).
+     * At most [MAX_EMOJI_PAGES] pages, so a workspace with thousands doesn't take long.
+     */
+    suspend fun listCustomEmojis(workspace: String?): List<JsonObject> {
+        val key = workspace?.let(::keyOf) ?: keys().firstOrNull().orEmpty()
+        val results = mutableListOf<JsonObject>()
+        var cursor: String? = null
+        var pages = 0
+        do {
+            val data = call("GET", "/custom_emojis" + (cursor?.let { "?start_cursor=$it" } ?: ""), key = key)
+            data.arrayOrNull("results")?.forEach { el -> el.asObjectOrNull()?.let(results::add) }
+            cursor = if (data.boolOrNull("has_more") == true) data.stringOrNull("next_cursor") else null
+        } while (cursor != null && ++pages < MAX_EMOJI_PAGES)
+        return results
+    }
 
     /** Changes database [databaseId]'s name or icon ([body], see DatabaseEdit). */
     suspend fun updateDatabase(databaseId: String, body: Map<String, Any?>): JsonObject = call("PATCH", "/databases/$databaseId", body)
@@ -429,7 +451,6 @@ class NotionClient(
     /** Changes data source [dataSourceId]'s name or icon ([body], see DatabaseEdit). */
     suspend fun updateDataSource(dataSourceId: String, body: Map<String, Any?>): JsonObject = call("PATCH", "/data_sources/$dataSourceId", body)
 
-    private fun emojiIcon(emoji: String) = mapOf("type" to "emoji", "emoji" to emoji)
 
     suspend fun updatePageProperties(pageId: String, properties: Map<String, Any?>): JsonObject =
         call("PATCH", "/pages/$pageId", mapOf("properties" to properties))
@@ -521,6 +542,7 @@ class NotionClient(
         /** Data sources (see decisions.md, 2026-10-16), "in_trash" and "position" (2026-10-17). */
         private const val NOTION_VERSION = "2026-03-11"
         private const val MAX_ATTEMPTS = 4
+        private const val MAX_EMOJI_PAGES = 10
 
         /** Between the pages of one search, so a long one stays within Notion's rate limit. */
         private const val PAGE_PAUSE_MS = 350L

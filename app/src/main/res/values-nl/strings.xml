@@ -79,6 +79,8 @@
     <string name="change_icon">Icoon wijzigen</string>
     <string name="remove_icon">Verwijderen</string>
     <string name="page_icon_type">Typ of plak een emoji</string>
+    <string name="workspace_emojis">Werkruimte</string>
+    <string name="common_emojis">Emoji</string>
     <string name="type_bulleted">Opsommingslijst</string>
     <string name="type_numbered">Genummerde lijst</string>
     <string name="type_checkbox">Selectievakje</string>

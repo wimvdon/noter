@@ -268,7 +268,17 @@ data class PageIcon(
     val urlExpiry: String? = null,
     val name: String? = null,
     val color: String? = null,
+    /** A custom emoji of the workspace: its ID (its image is [url]). Needed to set it as an icon again. */
+    val customEmojiId: String? = null,
 )
+
+/** An emoji a workspace added in Notion: [url] is its image, [id] what Notion wants to set it as an icon. */
+@Serializable
+data class CustomEmoji(val id: String, val name: String, val url: String)
+
+/** The custom emojis of one workspace, as Notion said when last asked. */
+@Serializable
+data class CustomEmojisCache(val emojis: List<CustomEmoji> = emptyList(), val fetchedMs: Long = 0)
 
 /** Something shared with the integration, for Search and Home's list (kept on this phone for Home). */
 @Serializable

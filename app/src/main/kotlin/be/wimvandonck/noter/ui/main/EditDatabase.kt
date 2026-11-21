@@ -60,6 +60,9 @@ import be.wimvandonck.noter.ui.common.PageIconView
 import be.wimvandonck.noter.ui.common.errorText
 import be.wimvandonck.noter.ui.common.kindNames
 import be.wimvandonck.noter.ui.note.PageIconSheet
+import be.wimvandonck.noter.data.model.CustomEmoji
+import be.wimvandonck.noter.data.notion.IconCodec
+import androidx.compose.runtime.saveable.listSaver
 import be.wimvandonck.noter.ui.theme.AppShapes
 
 /** The properties being edited, kept across rotation as "id, name, type, kind" strings. */
@@ -110,7 +113,16 @@ fun EditDatabaseScreen(
     state: DatabaseEditState,
     title: String,
     icon: PageIcon?,
-    onSave: (title: String, emoji: String?, iconChanged: Boolean, properties: List<EditedProperty>, names: Map<PropertyKind, String>) -> Unit,
+    customEmojis: List<CustomEmoji>,
+    onShowIcons: () -> Unit,
+    onSave: (
+        title: String,
+        emoji: String?,
+        custom: CustomEmoji?,
+        iconChanged: Boolean,
+        properties: List<EditedProperty>,
+        names: Map<PropertyKind, String>,
+    ) -> Unit,
     onOpenInNotion: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -118,6 +130,7 @@ fun EditDatabaseScreen(
     val properties = state.properties
     var name by rememberSaveable { mutableStateOf(title) }
     var emoji by rememberSaveable { mutableStateOf(icon?.emoji) }
+    var custom by rememberSaveable(stateSaver = CustomEmojiSaver) { mutableStateOf<CustomEmoji?>(null) }
     var iconChanged by rememberSaveable { mutableStateOf(false) }
     var edited by rememberSaveable(stateSaver = EditedSaver) { mutableStateOf(SchemaEdits.start(properties)) }
     var choosingIcon by remember { mutableStateOf(false) }
@@ -127,7 +140,7 @@ fun EditDatabaseScreen(
     val enabled = !state.saving
     val removed = properties.filter { p -> edited.none { it.id == p.id } }.map { it.name }
     val lostOptions = SchemaEdits.removedOptions(properties, edited)
-    val save = { onSave(name, emoji, iconChanged, edited, names) }
+    val save = { onSave(name, emoji, custom, iconChanged, edited, names) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
@@ -160,7 +173,7 @@ fun EditDatabaseScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val shown = if (iconChanged) emoji?.let { PageIcon(emoji = it) } else icon
+                        val shown = if (iconChanged) IconCodec.choice(emoji, custom?.id, custom?.url) else icon
                         Box(
                             Modifier
                                 .size(48.dp)
@@ -274,15 +287,25 @@ fun EditDatabaseScreen(
 
     if (choosingIcon) {
         PageIconSheet(
-            hasIcon = if (iconChanged) emoji != null else icon != null,
+            hasIcon = if (iconChanged) emoji != null || custom != null else icon != null,
+            customEmojis = customEmojis,
+            onShown = onShowIcons,
             onPick = { picked ->
                 choosingIcon = false
                 emoji = picked
+                custom = null
+                iconChanged = true
+            },
+            onPickCustom = { picked ->
+                choosingIcon = false
+                emoji = null
+                custom = picked
                 iconChanged = true
             },
             onRemove = {
                 choosingIcon = false
                 emoji = null
+                custom = null
                 iconChanged = true
             },
             onDismiss = { choosingIcon = false },
@@ -323,3 +346,9 @@ private fun typeLabel(type: String, names: Map<PropertyKind, String>): String =
             else -> R.string.property_kind_other
         },
     )
+
+/** Keeps the custom emoji chosen in Edit database across a screen rotation. */
+private val CustomEmojiSaver = listSaver<CustomEmoji?, String>(
+    save = { emoji -> emoji?.let { listOf(it.id, it.name, it.url) } ?: emptyList() },
+    restore = { if (it.size == 3) CustomEmoji(it[0], it[1], it[2]) else null },
+)
