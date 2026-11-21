@@ -152,6 +152,16 @@ object BlockCodec {
     }
 
     /**
+     * A new block of Notion's kind [type] ("image" or "file") showing the file of upload
+     * [uploadId] (sent before with NotionClient.uploadFile).
+     */
+    fun fileUploadRequest(type: String, uploadId: String): Map<String, Any?> =
+        mapOf("object" to "block", "type" to type, type to fileUpload(uploadId))
+
+    /** A file object pointing at upload [uploadId] (a block's file, a page's header image). */
+    fun fileUpload(uploadId: String): Map<String, Any?> = mapOf("type" to "file_upload", "file_upload" to mapOf("id" to uploadId))
+
+    /**
      * What to send with a new page made from shared content ([blocks]), best first: everything;
      * without the images (Notion refuses an image link it can't use, and then the whole page);
      * without the bookmark too; nothing. Each list once.

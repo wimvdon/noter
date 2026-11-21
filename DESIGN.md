@@ -296,7 +296,12 @@ app apart from their package (and `R` import) lines. Copy a change to the other 
   two never look alike.
   Columns are shown one below the other with a thin `outlineVariant` line between them.
 - The block toolbar sits above the keyboard on `surfaceContainerHigh`; the selected kind uses
-  `secondaryContainer`.
+  `secondaryContainer`. After the divider button come Add image (AddPhotoAlternate) and Add file
+  (AttachFile). A photo or file on its way shows under its line in an outlined box with a small
+  spinner and "Uploading…"; when it failed, the outline and message turn `error`, with Remove and
+  Retry text buttons. ⋮ has Add (or Change) header image and Remove header image.
+- A files property shows its files as assist chips (a tap opens a menu: Open, Remove, which asks
+  first) and an "Add file" chip; a file on its way is a disabled chip with a spinner.
 - A note's top app bar starts without a title (the icon and title are in the page). Once they
   have scrolled away, they fade into the bar: tapping the icon changes it, tapping the title
   scrolls back up with the cursor at the end of the title (as a database's icon and name do).

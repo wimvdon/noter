@@ -15,6 +15,7 @@ import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.logic.NotionViews
+import be.wimvandonck.noter.logic.PickedFile
 import be.wimvandonck.noter.logic.SharedContent
 import be.wimvandonck.noter.logic.TemplatePick
 import be.wimvandonck.noter.data.model.CardLayout
@@ -1104,5 +1105,124 @@ class NotesRepositoryTest {
         assertEquals("/databases/db-1", patch.path)
         assertEquals("""{"parent":{"type":"workspace","workspace":true}}""", patch.body)
         assertEquals(null, repo.recent.value?.single()?.parentId)
+    }
+
+    // ---- Photos and files ----
+
+    private val imageJson =
+        """{"object":"block","id":"img-1","type":"image","has_children":false,
+           "image":{"type":"file","file":{"url":"https://files.notion/photo.jpg?sig","expiry_time":"2026-11-21T11:00:00.000Z"},"caption":[]}}"""
+
+    private fun bot(limit: Long) = """{"object":"user","id":"bot","type":"bot","bot":{"workspace_limits":{"max_file_upload_size_in_bytes":$limit}}}"""
+
+    private fun uploads(sent: Sent, limit: Long = 5L * 1024 * 1024): Pair<Int, String>? = when {
+        sent.path == "/users/me" -> 200 to bot(limit)
+        sent.method == "POST" && sent.path == "/file_uploads" -> 200 to """{"object":"file_upload","id":"up-1","status":"pending"}"""
+        sent.method == "POST" && sent.path == "/file_uploads/up-1/send" -> 200 to """{"object":"file_upload","id":"up-1","status":"uploaded"}"""
+        else -> null
+    }
+
+    @Test
+    fun `a photo is uploaded to Notion and its block goes after the line`() = runBlocking {
+        notion.respond = { sent ->
+            uploads(sent) ?: when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list(FakeNotion.page("page-1", "db", "Trip"))
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.path == "/pages/page-1" -> 200 to FakeNotion.page("page-1", "db", "Trip")
+                sent.method == "GET" && sent.path.startsWith("/blocks/page-1/children") ->
+                    200 to FakeNotion.list(FakeNotion.todo("b1", "First"), FakeNotion.todo("b2", "Second"))
+                sent.method == "PATCH" && sent.path == "/blocks/page-1/children" -> 200 to FakeNotion.list(imageJson)
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+        val loaded = checkNotNull(repo.fetchContent("page-1")).blocks
+
+        val uploadId = repo.uploadFile("page-1", PickedFile("photo.jpg", "image/jpeg", "JPEGDATA".encodeToByteArray()))
+        assertEquals("up-1", uploadId)
+        val create = notion.requests.single { it.path == "/file_uploads" }
+        assertEquals("""{"mode":"single_part","filename":"photo.jpg","content_type":"image/jpeg"}""", create.body)
+        val send = notion.requests.single { it.path == "/file_uploads/up-1/send" }
+        assertTrue(send.contentType, send.contentType.startsWith("multipart/form-data; boundary="))
+        assertTrue(send.body, send.body.contains("""Content-Disposition: form-data; name="file"; filename="photo.jpg""""))
+        assertTrue(send.body, send.body.contains("Content-Type: image/jpeg"))
+        assertTrue(send.body, send.body.contains("JPEGDATA"))
+
+        val block = checkNotNull(repo.insertFileBlock("page-1", loaded.first().key, uploadId, "image"))
+        val append = notion.requests.single { it.method == "PATCH" && it.path == "/blocks/page-1/children" }
+        assertTrue(append.body, append.body.contains(""""image":{"type":"file_upload","file_upload":{"id":"up-1"}}"""))
+        assertTrue(append.body, append.body.contains(""""position":{"type":"after_block","after_block":{"id":"b1"}}"""))
+        assertEquals("https://files.notion/photo.jpg?sig", block.url)
+        val saved = checkNotNull(repo.cachedContent("page-1"))
+        assertEquals(listOf("b1", "img-1", "b2"), saved.blocks.map { it.notionId })
+        assertEquals(listOf("b1", "img-1", "b2"), saved.base.map { it.notionId })
+        assertFalse(saved.dirty)
+    }
+
+    @Test
+    fun `a file bigger than the workspace takes is refused before it is sent`() = runBlocking {
+        notion.respond = { sent ->
+            uploads(sent) ?: when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list(FakeNotion.page("page-1", "db", "Trip"))
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+        val big = PickedFile("big.jpg", "image/jpeg", ByteArray(5 * 1024 * 1024 + 1))
+        val error = runCatching { repo.uploadFile("page-1", big) }.exceptionOrNull()
+        assertTrue(error.toString(), error is UploadException && error.problem == UploadProblem.TOO_LARGE)
+        assertEquals(5L * 1024 * 1024, (error as UploadException).limitBytes)
+        assertTrue(notion.requests.none { it.path.startsWith("/file_uploads") })
+    }
+
+    @Test
+    fun `a file added to a files property keeps the files it has`() = runBlocking {
+        val hosted = """{"name":"scan.pdf","type":"file","file":{"url":"https://files.notion/scan.pdf?sig","expiry_time":"2026-11-21T11:00:00.000Z"}}"""
+        val pageWithFiles =
+            """{"object":"page","id":"page-1","url":"https://www.notion.so/page-1","last_edited_time":"2026-10-16T10:00:00.000Z",
+               "properties":{"Name":{"id":"title","type":"title","title":[]},"Files":{"id":"f","type":"files","files":[$hosted]}}}"""
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list(pageWithFiles)
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.path == "/pages/page-1" -> 200 to pageWithFiles
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+        repo.changeFiles("page-1", "Files", added = listOf("photo.jpg" to "up-1"))
+        val patch = notion.requests.single { it.method == "PATCH" && it.path == "/pages/page-1" }
+        assertEquals(
+            """{"properties":{"Files":{"files":[$hosted,{"name":"photo.jpg","type":"file_upload","file_upload":{"id":"up-1"}}]}}}""",
+            patch.body.replace(Regex("\\s"), ""),
+        )
+        // The page is asked for first: Notion only takes its own files back as it just sent them.
+        val order = notion.requests.map { it.method + " " + it.path }
+        assertTrue(order.toString(), order.indexOf("GET /pages/page-1") < order.indexOf("PATCH /pages/page-1"))
+
+        repo.changeFiles("page-1", "Files", removeAt = 0, removeName = "scan.pdf")
+        assertEquals("""{"properties":{"Files":{"files":[]}}}""", notion.requests.last { it.method == "PATCH" }.body)
+    }
+
+    @Test
+    fun `a header image is set from an upload and removed with null`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list(FakeNotion.page("page-1", "db", "Trip"))
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.path == "/pages/page-1" -> 200 to FakeNotion.page("page-1", "db", "Trip")
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+        repo.setCover("page-1", "up-9")
+        repo.setCover("page-1", null)
+        val patches = notion.requests.filter { it.method == "PATCH" && it.path == "/pages/page-1" }.map { it.body }
+        assertEquals(listOf("""{"cover":{"type":"file_upload","file_upload":{"id":"up-9"}}}""", """{"cover":null}"""), patches)
     }
 }

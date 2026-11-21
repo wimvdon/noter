@@ -86,6 +86,8 @@ class PropertyLookups(
     val relatedPages: Map<String, List<PageRef>?>,
     val loadUsers: () -> Unit,
     val loadRelated: (String) -> Unit,
+    /** Adding and removing files in a files property (null: files are only shown). */
+    val files: FileActions? = null,
 )
 
 /** One property of the note: its name and an editor that fits its type. */
@@ -112,8 +114,11 @@ fun PropertyRow(
             modifier = Modifier.width(120.dp).padding(end = 12.dp),
         )
         Column(Modifier.weight(1f)) {
+            val files = lookups.files
             if (property.isEditable) {
                 PropertyEditor(property, schema, lookups, onChange)
+            } else if (property.value is PropertyValue.Files && files != null) {
+                FilesEditor(property.name, property.value, files)
             } else {
                 ReadOnlyValue(property)
             }

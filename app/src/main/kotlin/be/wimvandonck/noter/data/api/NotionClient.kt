@@ -1,9 +1,12 @@
 package be.wimvandonck.noter.data.api
 
 import be.wimvandonck.noter.data.model.PageRef
+import be.wimvandonck.noter.data.notion.BlockCodec
 import be.wimvandonck.noter.data.notion.IconCodec
 import be.wimvandonck.noter.data.notion.InlineMarkdown
+import be.wimvandonck.noter.logic.FileUploads
 import be.wimvandonck.noter.logic.KeyRouter
+import be.wimvandonck.noter.logic.PickedFile
 import be.wimvandonck.noter.logic.Workspaces
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -17,11 +20,15 @@ import kotlinx.serialization.json.jsonObject
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -66,6 +73,8 @@ class NotionClient(
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        // A photo of up to 20 MB on a slow connection.
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
     private val router = KeyRouter()
@@ -175,6 +184,8 @@ class NotionClient(
         withContext(Dispatchers.IO) {
             if (key.isBlank()) throw NotionException("No Notion API key", status = 401, code = "no_key")
             val requestBody = when {
+                // A file sent to Notion (multipart, see uploadFile).
+                body is RequestBody -> body
                 body != null -> body.toJsonElement().toString().toRequestBody(JSON)
                 method != "GET" && method != "DELETE" -> "{}".toRequestBody(JSON)
                 else -> null
@@ -507,6 +518,74 @@ class NotionClient(
         }
         return ids
     }
+
+    /**
+     * Adds one [block] to [parentId] (a page or a block), after block [after] or at the end, and
+     * returns it as Notion has it now (for a file: with its link), or null when the answer doesn't
+     * tell which block is new ([knownIds]: the blocks the caller knows the parent has).
+     */
+    suspend fun appendBlock(parentId: String, block: Map<String, Any?>, after: String?, knownIds: Set<String>): JsonObject? {
+        val body = buildMap<String, Any?> {
+            put("children", listOf(block))
+            if (after != null) put("position", mapOf("type" to "after_block", "after_block" to mapOf("id" to after)))
+        }
+        val result = call("PATCH", "/blocks/$parentId/children", body, adds = true)
+        val new = result.arrayOrNull("results").orEmpty().mapNotNull { it.asObjectOrNull() }.filter { it.stringOrNull("id") !in knownIds }
+        // Others may have added blocks in Notion meanwhile: the new one is of the kind sent.
+        return new.singleOrNull() ?: new.singleOrNull { it.stringOrNull("type") == block["type"] }
+    }
+
+    // ---- Files (Notion's File Upload API) ----
+
+    /** The largest file each token's workspace takes (see FileUploads.limit), once asked. */
+    private val uploadLimits = ConcurrentHashMap<String, Long>()
+
+    /**
+     * The token of [pageId]'s workspace: a file is uploaded with the token that then attaches it.
+     * With several tokens and the page's workspace not known yet, Notion is asked for the page.
+     */
+    private suspend fun keyForPage(pageId: String): String {
+        val all = keys()
+        if (all.size <= 1) return all.firstOrNull().orEmpty()
+        if (router.workspaceOf(pageId) == null) getPage(pageId)
+        return router.candidates(pageId, all).first()
+    }
+
+    /**
+     * The largest file that can go to [pageId]: what its workspace allows (Notion tells it with
+     * the token's own user: 5 MiB on a free plan), at most what one request takes.
+     */
+    suspend fun uploadLimit(pageId: String): Long {
+        val key = keyForPage(pageId)
+        uploadLimits[key]?.let { return it }
+        val max = me(key).objOrNull("bot")?.objOrNull("workspace_limits")?.get("max_file_upload_size_in_bytes").contentOrNull()?.toLongOrNull()
+        return FileUploads.limit(max).also { uploadLimits[key] = it }
+    }
+
+    /**
+     * Sends [file] to Notion for page [pageId] (two requests: make the upload, then send the file
+     * as multipart form data) and returns the upload's ID. Within an hour it has to be attached to
+     * a block, a files property or a header image, or Notion drops it.
+     */
+    suspend fun uploadFile(pageId: String, file: PickedFile): String {
+        val key = keyForPage(pageId)
+        val created = send(
+            "POST", "/file_uploads",
+            mapOf("mode" to "single_part", "filename" to file.name, "content_type" to file.mimeType),
+            key, adds = true,
+        )
+        val id = created.stringOrNull("id") ?: throw NotionException("Notion did not return a file upload ID", status = 500)
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("file", file.name, file.bytes.toRequestBody(file.mimeType.toMediaTypeOrNull()))
+            .build()
+        send("POST", "/file_uploads/$id/send", body, key, adds = true)
+        return id
+    }
+
+    /** Sets the page's header image to upload [uploadId], or removes it when that is null. */
+    suspend fun updatePageCover(pageId: String, uploadId: String?): JsonObject =
+        call("PATCH", "/pages/$pageId", mapOf("cover" to uploadId?.let(BlockCodec::fileUpload)))
 
     suspend fun updateBlock(blockId: String, body: Map<String, Any?>) {
         call("PATCH", "/blocks/$blockId", body)

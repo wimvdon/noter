@@ -24,6 +24,7 @@ node --test worker/test/noter-sign-in.test.mjs
 ### What the unit tests cover
 | Test | Covers |
 |---|---|
+| `logic/FileUploadsTest`, `data/NotesRepositoryTest` (photos and files), `PropertyCodecTest`, `BlockCodecTest` (file uploads) | The size limit (the workspace's, at most 20 MB, an empty file refused), image or file block by kind, names given an extension, where a new file block goes (after a line and what is nested in it, into the same parent, at the end) and that a line not in Notion yet can't be pointed at; the upload's requests (JSON, then multipart with the file), a file too big refused before anything is sent, the block added after its line here and in Notion's copy, a files property written back with the files Notion just sent plus the upload (or without the removed one), the header image set and removed |
 | `ui/common/SheetGuardsTest` | A scroll or fling in a sheet's list never pulls the sheet down; a swipe from the top does; with the keyboard open or the sheet still moving a close only closes the keyboard |
 | `logic/ContentMergeTest` | Typing while a newer version comes from Notion: the edits go on top of it, keeping blocks added or changed in Notion meanwhile |
 | `data/NotesRepositoryTest` (pull-to-refresh) | Pull-to-refresh asks Notion again for the people and linked pages kept here, before they would expire |

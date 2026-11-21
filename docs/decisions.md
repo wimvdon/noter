@@ -2,6 +2,21 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Photos and files go to Notion at once, never queued
+
+A note can get a photo or file (an image or file block after the line with the cursor, a file in
+a files property, a header image) through Notion's File Upload API: make an upload, send the
+file as multipart form data, attach it by the upload's ID (`NotionClient.uploadFile`). The phone
+picks them with the system photo picker and file picker, so no new permission. Only single-part
+uploads: at most 20 MB, and less when the workspace allows less (5 MB on a free plan, which
+Notion tells with the token's own user). Uploads are sent right away and fail with a message
+when offline: Notion drops an upload that isn't attached within an hour, and keeping photos on
+the phone to send later would need storage and a queue that survives restarts. A files property
+is written back with the files Notion just sent for the page, because Notion replaces the whole
+list and only takes its own hosted files back as a recent answer had them. Rejected for now:
+taking a photo with the camera (needs a FileProvider in the manifest) and multi-part uploads for
+bigger files.
+
 ## 2026-11-21: Comments in a note, online only
 
 A note's app bar has a comments icon: a sheet with the page's discussions, a field to add a comment,
