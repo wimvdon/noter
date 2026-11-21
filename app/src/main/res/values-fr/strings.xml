@@ -291,6 +291,17 @@
     <string name="view_settings">Réglages des vues</string>
     <string name="edit_views_in_notion">Modifier les vues dans Notion</string>
     <string name="more_in_notion">Plus d’options dans Notion</string>
+    <!-- Trash (undo and the Trash list) -->
+    <string name="trash_moved">Mis à la corbeille</string>
+    <string name="section_trash">Notes et pages</string>
+    <string name="settings_trash">Corbeille</string>
+    <string name="settings_trash_summary">Restaurez ce que vous avez mis à la corbeille dans Notion ces 30 derniers jours.</string>
+    <string name="trash_empty_title">La corbeille est vide</string>
+    <string name="trash_empty_body">Les pages mises à la corbeille dans Notion apparaissent ici pendant 30 jours.</string>
+    <string name="trash_restore">Restaurer</string>
+    <string name="trash_restored">Restauré</string>
+    <string name="trash_restore_failed">Impossible de restaurer : %1$s</string>
+    <string name="trash_in">Dans %1$s</string>
     <string name="action_move_to">Déplacer vers…</string>
     <string name="move_kind_page">Page</string>
     <string name="move_kind_database">Base de données</string>

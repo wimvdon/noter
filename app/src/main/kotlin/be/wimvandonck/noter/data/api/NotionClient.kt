@@ -261,7 +261,15 @@ class NotionClient(
     suspend fun search(query: String, limit: Int, total: Int = limit, titleOnly: Boolean = false): List<JsonObject> =
         NotionRoutes.newestFirst(eachKey { key -> search(query, limit, key, titleOnly) }, total)
 
-    private suspend fun search(query: String, limit: Int, key: String, titleOnly: Boolean): List<JsonObject> {
+    /**
+     * The pages in Notion's trash (it empties it itself after 30 days), most recently edited first;
+     * at most [limit] per workspace. The same search as [search] with the trash filter
+     * (`filter.in_trash`) next to the object filter.
+     */
+    suspend fun searchTrash(limit: Int): List<JsonObject> =
+        NotionRoutes.newestFirst(eachKey { key -> search("", limit, key, titleOnly = false, trash = true) }, Int.MAX_VALUE)
+
+    private suspend fun search(query: String, limit: Int, key: String, titleOnly: Boolean, trash: Boolean = false): List<JsonObject> {
         val results = mutableListOf<JsonObject>()
         var cursor: String? = null
         do {
@@ -269,6 +277,7 @@ class NotionClient(
                 "POST", if (titleOnly) "/search?filter_properties=title" else "/search",
                 buildMap {
                     if (query.isNotBlank()) put("query", query)
+                    if (trash) put("filter", mapOf("property" to "object", "value" to "page", "in_trash" to true))
                     put("sort", mapOf("direction" to "descending", "timestamp" to "last_edited_time"))
                     put("page_size", 100)
                     if (cursor != null) put("start_cursor", cursor)
@@ -429,6 +438,9 @@ class NotionClient(
     suspend fun trashPage(pageId: String) {
         call("PATCH", "/pages/$pageId", mapOf("in_trash" to true))
     }
+
+    /** Takes a page out of Notion's trash again. Returns the page. */
+    suspend fun restorePage(pageId: String): JsonObject = call("PATCH", "/pages/$pageId", mapOf("in_trash" to false))
 
     suspend fun blockChildren(blockId: String): List<JsonObject> =
         paged { cursor ->

@@ -14,7 +14,8 @@ crash reporting.
   you shared with it. If you add tokens for several workspaces (Settings › Workspaces), each
   is used only for that workspace's pages, and searches ask every workspace. It reads the notes you open and the lists you show (Browse searches by
   title), and writes the changes you make (titles, properties, note content, moving a note to
-  Notion's trash).
+  Notion's trash, and taking a page out of it again: Undo after trashing, or Settings › Trash,
+  which lists what Notion's trash holds for 30 days).
 - **Noter's sign-in helper**, only when you use **Connect to Notion** (OAuth) instead of pasting a
   token. Notion requires a secret for that sign-in that can't be kept inside an app, so a small
   helper run by the developer on Cloudflare Workers (`noter.wim.to`) adds it. When you allow access in Notion,

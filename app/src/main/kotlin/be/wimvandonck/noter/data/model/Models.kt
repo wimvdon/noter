@@ -291,6 +291,20 @@ data class WorkspaceItem(
     val parentId: String? = null,
 )
 
+/**
+ * A page in Notion's trash, for Settings' Trash list. [parentId] is what it was in (a database's
+ * data source or a page; null: at the top of the workspace), [parentName] its name when known.
+ */
+data class TrashedPage(
+    val id: String,
+    val title: String,
+    val icon: PageIcon? = null,
+    val lastEditedTime: String = "",
+    val parentId: String? = null,
+    val parentIsDatabase: Boolean = false,
+    val parentName: String = "",
+)
+
 /** A database as Notion describes it: its name, icon and data sources (see WorkspaceCodec.group). */
 @Serializable
 data class DatabaseInfo(

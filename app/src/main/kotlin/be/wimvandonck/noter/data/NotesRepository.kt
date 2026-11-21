@@ -22,6 +22,7 @@ import be.wimvandonck.noter.data.model.PageContent
 import be.wimvandonck.noter.data.model.PageIcon
 import be.wimvandonck.noter.data.model.PageRef
 import be.wimvandonck.noter.data.model.PropertyValue
+import be.wimvandonck.noter.data.model.TrashedPage
 import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.data.notion.BlockCodec
 import be.wimvandonck.noter.data.notion.InlineMarkdown
@@ -40,6 +41,7 @@ import be.wimvandonck.noter.logic.WebArticles
 import kotlinx.serialization.json.JsonObject
 import be.wimvandonck.noter.data.notion.PropertyCodec
 import be.wimvandonck.noter.data.notion.TokenCodec
+import be.wimvandonck.noter.data.notion.TrashCodec
 import be.wimvandonck.noter.data.notion.TokenInfo
 import be.wimvandonck.noter.data.notion.WorkspaceCodec
 import be.wimvandonck.noter.data.store.AppSettings
@@ -122,6 +124,19 @@ sealed interface RepoEvent {
 }
 
 /**
+ * A note just moved to the trash on this phone, kept in memory so Undo ([NotesRepository.undoTrash])
+ * can bring it back as it was: its place in the list, its content, whether it was pinned (at
+ * [pinnedIndex]) and the changes that were waiting to be sent for it ([dropped]).
+ */
+data class TrashedNote(
+    val note: NoteSummary,
+    val index: Int,
+    val content: PageContent?,
+    val pinnedIndex: Int?,
+    val dropped: List<PendingOp>,
+)
+
+/**
  * The single source of notes for the screens.
  *
  * - **Reading**: everything is shown from the on-phone copy first, then refreshed in the
@@ -189,6 +204,19 @@ class NotesRepository(
 
     private val _events = MutableSharedFlow<RepoEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<RepoEvent> = _events
+
+    private val _lastTrashed = MutableStateFlow<TrashedNote?>(null)
+
+    /**
+     * The note moved to the trash last, until the screen it returned to has offered Undo for it
+     * ([trashNoticeShown]). A state, not an event: the note's screen closes right after trashing,
+     * before the next screen listens.
+     */
+    val lastTrashed: StateFlow<TrashedNote?> = _lastTrashed.asStateFlow()
+
+    /** The change being sent right now (see [flush]); it can't be taken back. */
+    @Volatile
+    private var inFlight: PendingOp? = null
 
     /** Notes created on this phone that got their Notion ID: local ID → Notion ID. */
     private val renamed = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -338,8 +366,12 @@ class NotesRepository(
                 lock.withLock {
                     val queue = _outbox.value
                     val pendingTrash = queue.filterIsInstance<PendingOp.TrashPage>().map { it.pageId }.toSet()
+                    val pendingRestore = queue.filterIsInstance<PendingOp.RestorePage>().map { it.pageId }.toSet()
                     val existing = _databases.value[databaseId]?.notes.orEmpty()
-                    val merged = SyncPolicy.merge(existing, fetched, kind == RefreshKind.FULL, trashed + pendingTrash)
+                    // A note brought back (Undo) whose restore isn't sent yet is still in Notion's trash: keep it.
+                    val kept = existing.filter { it.id in pendingRestore }
+                    val merged = (SyncPolicy.merge(existing, fetched, kind == RefreshKind.FULL, trashed + pendingTrash) + kept)
+                        .distinctBy { it.id }
                         .filter { it.id !in pendingTrash }
                         .map { Outbox.applyPending(it, queue) }
                     val full = kind == RefreshKind.FULL
@@ -673,17 +705,75 @@ class NotesRepository(
     /** Moves the note to Notion's trash and removes it here. */
     suspend fun trashNote(pageId: String) = withContext(Dispatchers.IO) {
         val id = resolve(pageId)
+        val pinnedIndex = settings.current().pinned.indexOf(id).takeIf { it >= 0 }
         lock.withLock {
             trashed += id
-            val databaseId = findNote(_databases.value, id)?.databaseId
+            val note = findNote(_databases.value, id)
+            val databaseId = note?.databaseId
+            val index = databaseId?.let { key -> _databases.value[key]?.notes?.indexOfFirst { it.id == id } } ?: -1
+            val kept = if (note != null) {
+                TrashedNote(note, index.coerceAtLeast(0), cache.content(id), pinnedIndex, _outbox.value.filter { it.pageId == id })
+            } else {
+                null
+            }
             if (databaseId != null) {
                 setState(databaseId) { db -> db.copy(notes = db.notes.filterNot { it.id == id }) }
                 _databases.value[databaseId]?.let { saveDatabaseCache(databaseId, it) }
             }
             cache.deleteContent(id)
             enqueue(PendingOp.TrashPage(id))
+            _lastTrashed.value = kept
         }
         settings.update { s -> s.copy(pinned = s.pinned - id) }
+        scheduleFlush()
+    }
+
+    /** The screen showed (or no longer needs) Undo for [kept]. */
+    fun trashNoticeShown(kept: TrashedNote) {
+        _lastTrashed.compareAndSet(kept, null)
+    }
+
+    /**
+     * Brings back a note moved to the trash a moment ago: in the list where it was, with its
+     * content, pin and waiting changes. A trash that wasn't sent yet is simply taken back; one that
+     * was gets a restore in the queue ([PendingOp.RestorePage]), so it also works offline.
+     */
+    suspend fun undoTrash(kept: TrashedNote) = withContext(Dispatchers.IO) {
+        val oldId = kept.note.id
+        val id = resolve(oldId)
+        lock.withLock {
+            trashed -= oldId
+            trashed -= id
+            val sending = inFlight
+            var queue = Outbox.add(_outbox.value, PendingOp.RestorePage(id), sending)
+            // Made in Notion since (renamed), or being made right now: not made a second time.
+            val made = id != oldId || (sending is PendingOp.CreatePage && sending.pageId == oldId)
+            kept.dropped
+                .filterNot { made && it is PendingOp.CreatePage }
+                .map { if (id != oldId) Outbox.rename(listOf(it), oldId, id).first() else it }
+                .forEach { queue = Outbox.add(queue, it) }
+            val note = kept.note.copy(id = id)
+            val databaseId = note.databaseId
+            if (findNote(_databases.value, id) == null) {
+                setState(databaseId) { db ->
+                    db.copy(notes = db.notes.toMutableList().apply { add(kept.index.coerceAtMost(size), note) }, loaded = true)
+                }
+                _databases.value[databaseId]?.let { saveDatabaseCache(databaseId, it) }
+            }
+            kept.content?.let { content ->
+                // A note Notion made after the trash has none of its content yet: it is sent again.
+                val back = if (id == oldId) content else content.copy(pageId = id, base = emptyList(), dirty = content.blocks.isNotEmpty())
+                cache.saveContent(back)
+                updatePreview(id, back)
+                if (id != oldId && back.dirty) queue = Outbox.add(queue, PendingOp.SaveContent(id))
+            }
+            _outbox.value = queue
+            cache.saveOutbox(queue)
+            _lastTrashed.compareAndSet(kept, null)
+        }
+        kept.pinnedIndex?.let { position ->
+            settings.update { s -> if (id in s.pinned) s else s.copy(pinned = s.pinned.toMutableList().apply { add(position.coerceAtMost(size), id) }) }
+        }
         scheduleFlush()
     }
 
@@ -860,7 +950,7 @@ class NotesRepository(
         if (!hasKey()) return@withContext
         flushLock.withLock {
             while (true) {
-                val op = lock.withLock { _outbox.value.firstOrNull() } ?: break
+                val op = lock.withLock { _outbox.value.firstOrNull()?.also { inFlight = it } } ?: break
                 val done = try {
                     withContext(Dispatchers.IO) { execute(op) }
                 } catch (e: NotionException) {
@@ -868,10 +958,12 @@ class NotesRepository(
                         e.isTemporary -> {
                             if (e.isOffline) _offline.value = true
                             scheduleRetry(e.isOffline)
+                            inFlight = null
                             return@withLock
                         }
                         e.status == 401 -> {
                             _events.tryEmit(RepoEvent.KeyRejected)
+                            inFlight = null
                             return@withLock
                         }
                         // Gone from Notion or moved to its trash (here or elsewhere): nothing left to save.
@@ -905,6 +997,7 @@ class NotesRepository(
                     }
                     _outbox.value = queue
                     cache.saveOutbox(queue)
+                    inFlight = null
                 }
             }
         }
@@ -948,6 +1041,10 @@ class NotesRepository(
         }
         is PendingOp.TrashPage -> {
             client.trashPage(op.pageId)
+            true
+        }
+        is PendingOp.RestorePage -> {
+            client.restorePage(op.pageId)
             true
         }
     }
@@ -1514,6 +1611,74 @@ class NotesRepository(
         }
     }
 
+    // ---- Trash ----------------------------------------------------------------------------
+
+    /**
+     * The pages in Notion's trash, newest first (at most [TRASH_LIMIT] per workspace), each with
+     * the name of what it was in when that is known (from this phone, else asked from Notion for
+     * up to [MAX_PARENT_LOOKUPS] places). Throws when Notion can't be reached.
+     */
+    suspend fun trashedPages(): List<TrashedPage> = withContext(Dispatchers.IO) {
+        val pages = TrashCodec.parseAll(client.searchTrash(TRASH_LIMIT))
+        val names = mutableMapOf<String, String>()
+        var asked = 0
+        for (parent in pages.mapNotNull { p -> p.parentId?.let { it to p.parentIsDatabase } }.distinctBy { plain(it.first) }) {
+            val (id, isDatabase) = parent
+            val known = parentNameOnPhone(id)
+            if (known != null) {
+                names[plain(id)] = known
+                continue
+            }
+            if (asked >= MAX_PARENT_LOOKUPS) continue
+            asked++
+            try {
+                names[plain(id)] = if (isDatabase) {
+                    PropertyCodec.parseSchema(client.getDataSource(id)).title
+                } else {
+                    InlineMarkdown.stripped(PropertyCodec.parsePage(client.getPage(id), PAGES)?.title.orEmpty())
+                }
+            } catch (e: NotionException) {
+                if (e.isOffline) break
+            }
+            delay(PAUSE_MS)
+        }
+        pages.map { p -> p.copy(parentName = p.parentId?.let { names[plain(it)] }.orEmpty()) }
+    }
+
+    /** The name of database or page [id] when this phone has it (Home's list, the last search, a copy of the notes). */
+    private fun parentNameOnPhone(id: String): String? =
+        knownItem(id)?.title?.takeIf { it.isNotBlank() }
+            ?: _databases.value.entries.firstOrNull { plain(it.key) == plain(id) }?.value?.schema?.title?.takeIf { it.isNotBlank() }
+            ?: findNote(_databases.value, id)?.title?.let { InlineMarkdown.stripped(it) }?.takeIf { it.isNotBlank() }
+
+    /**
+     * Takes [page] out of Notion's trash. Where it belongs the screens show it again: in its
+     * database's copy on this phone (when it has one), else in Home's list (asked again). Throws
+     * when Notion can't be reached or refuses (its parent may be in the trash too).
+     */
+    suspend fun restoreFromTrash(page: TrashedPage) {
+        val restored = withContext(Dispatchers.IO) { client.restorePage(page.id) }
+        val id = restored.stringOrNull("id") ?: page.id
+        lock.withLock {
+            trashed -= id
+            // A trash of this page that never got sent is moot now.
+            val queue = _outbox.value.filterNot { it is PendingOp.TrashPage && it.pageId == id }
+            if (queue.size != _outbox.value.size) {
+                _outbox.value = queue
+                cache.saveOutbox(queue)
+            }
+        }
+        val database = WorkspaceCodec.parentDatabase(restored)
+        if (database != null) {
+            loadDatabase(database)
+            val here = _databases.value[database]?.let { it.schema != null || it.notes.isNotEmpty() } == true
+            val note = PropertyCodec.parsePage(restored, database)
+            if (here && note != null) openNote(note)
+        } else {
+            scope.launch { runCatching { refreshRecent() } }
+        }
+    }
+
     /**
      * [found] with what is right inside its top-level pages ([HomeLevels]) that the search didn't
      * reach: an old subpage or database. One request per top-level page (the newest
@@ -1931,6 +2096,10 @@ class NotesRepository(
         /** Top-level pages asked for what is right inside them, and pages or databases added that way. */
         private const val MAX_EXPANDED = 50
         private const val MAX_ADDED = 50
+
+        /** The Trash list: pages per workspace, and places asked from Notion for their name. */
+        private const val TRASH_LIMIT = 100
+        private const val MAX_PARENT_LOOKUPS = 10
 
         /** Between those requests (Notion allows about three a second). */
         private const val PAUSE_MS = 350L

@@ -291,6 +291,17 @@
     <string name="view_settings">Impostazioni viste</string>
     <string name="edit_views_in_notion">Modifica le viste in Notion</string>
     <string name="more_in_notion">Altre opzioni in Notion</string>
+    <!-- Trash (undo and the Trash list) -->
+    <string name="trash_moved">Spostato nel cestino</string>
+    <string name="section_trash">Note e pagine</string>
+    <string name="settings_trash">Cestino</string>
+    <string name="settings_trash_summary">Ripristina ciò che hai spostato nel cestino di Notion negli ultimi 30 giorni.</string>
+    <string name="trash_empty_title">Il cestino è vuoto</string>
+    <string name="trash_empty_body">Le pagine che sposti nel cestino di Notion compaiono qui per 30 giorni.</string>
+    <string name="trash_restore">Ripristina</string>
+    <string name="trash_restored">Ripristinato</string>
+    <string name="trash_restore_failed">Impossibile ripristinare: %1$s</string>
+    <string name="trash_in">In %1$s</string>
     <string name="action_move_to">Sposta in…</string>
     <string name="move_kind_page">Pagina</string>
     <string name="move_kind_database">Database</string>

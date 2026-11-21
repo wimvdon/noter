@@ -66,6 +66,7 @@ import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalResources
 import be.wimvandonck.noter.ui.common.MoveSheet
+import be.wimvandonck.noter.ui.common.TrashUndoEffect
 import be.wimvandonck.noter.ui.common.PageIconView
 import be.wimvandonck.noter.ui.common.movedName
 import kotlinx.coroutines.launch
@@ -110,6 +111,7 @@ fun DatabaseScreen(
         onPauseOrDispose { viewModel.setVisible(false) }
     }
 
+    TrashUndoEffect(snackbar)
     val quickActionDeleted = stringResource(R.string.quick_action_deleted)
     val undo = stringResource(R.string.undo)
     LaunchedEffect(viewModel) {

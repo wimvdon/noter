@@ -2,6 +2,24 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Undo after the trash, and a Trash list in Settings
+
+Moving a note to the trash is one tap away from a mistake, so after it the screen the note closed
+to shows "Moved to trash" with Undo (`TrashUndoEffect`, a state in the repository
+(`NotesRepository.lastTrashed`) rather than an event, since the note's screen closes before the next
+one listens). Undo (`undoTrash`) puts the note back in its list place with its content, pin and the
+changes that were waiting for it. The trash itself is a queued change (`PendingOp.TrashPage`), so
+Undo takes it out of the queue when it wasn't sent, and otherwise queues `PendingOp.RestorePage`
+behind it (`Outbox.add` knows which change is being sent right now): it works offline and never
+leaves a note trashed in Notion but shown here. Settings › Trash lists the pages in Notion's trash
+(`POST /search` with `filter: {property: "object", value: "page", in_trash: true}`, checked against
+Notion's reference; the option can be combined with the object filter), per workspace, each with
+where it was, and Restore (`PATCH /pages/{id}` with `in_trash: false`). That list is online only and
+not queued: a restore asks Notion at once and shows the error when it refuses (for example when the
+page's parent is in the trash too). Notion empties the trash after 30 days, so there is no "delete
+forever". Rejected: a trash list kept on the phone (it would go stale, and Notion already is the
+list), and an undo that only works until the next sync (the queue handles every case).
+
 ## 2026-11-21: Notion's search sends only titles for Home's list
 
 Since 2026-10-14 `POST /v1/search` takes `filter_properties` like a data source query. Home's

@@ -49,7 +49,7 @@ node --test worker/test/noter-sign-in.test.mjs
 | `data/notion/InlineTokensTest` | Editing around mentions (typing before, after or inside one, deleting part of one removes it, two side by side), colours kept when their text changes, pasted marker characters dropped, splitting lines |
 | `data/sync/ContentDiffTest` | The block changes sent to Notion for an edit, also for nested blocks (new blocks in their parent, moved blocks added again) |
 | `data/sync/BlockMatchTest` | New blocks keep the IDs Notion gave them, and blocks Notion added without answering are recognised, so nothing is added twice |
-| `data/sync/OutboxTest` | The queue of unsent changes (merging, renaming new notes) |
+| `data/sync/OutboxTest` | The queue of unsent changes (merging, renaming new notes; a restore after Undo: an unsent trash is taken back, one being sent gets a restore behind it) |
 | `data/sync/SyncPolicyTest` | When to refresh, and merging refreshed notes |
 | `data/sync/SaveTimingTest` | How soon edits are saved while typing (within Notion's rate limit) |
 | `data/sync/SourceKeysTest` | Keys saved before data sources renamed to the data source (setups, pinned databases, order, layouts, waiting new notes) |
@@ -71,6 +71,9 @@ node --test worker/test/noter-sign-in.test.mjs
 | `logic/LegacyNotebooksTest` | Notebooks from before the redesign: each database keeps its notebook's setup and is pinned in the order of the tabs (also a notebook of several data sources), a page's notebook becomes a pinned page, the first notebook of a database wins, a setup made since then stays, old filter properties |
 | `logic/ColumnsTest` | Columns: how far their blocks are indented, and that blocks stay in their column |
 | `data/notion/BlockCodecTest` (shares) | Images and bookmarks from a share written as links; a refused shared page tried with less |
+| `data/TrashTest` | Undo after trashing (nothing is sent, the note returns in its place, pinned; after a sent trash a restore is sent; edits that were waiting are sent again), the trash search's request body and the place names, restoring a page (`in_trash: false`, shown again in its database, Home asked again for a page, errors thrown) |
+| `data/notion/TrashCodecTest` | The pages in Notion's trash: title, icon, and the database or page each was in |
+| `logic/TrashListTest` | The Trash list split by workspace, a restored page leaving it |
 | `data/notion/WorkspaceCodecTest` | The list of databases and pages from Notion's search, data sources (grouped by their database; one the database doesn't list is left out) and the data source a page belongs to; the page each page or database is in, a data source placed where its database is |
 | `data/icons/IconCatalogTest` | Reading the icon file, icon search, old icon keys, and that the bundled file has every suggested icon |
 | `logic/PageTreeTest` | Home's tree of databases and pages: the top level (what isn't in another page of the list) and the level below, most recently edited first (a page counting what is inside it), IDs with or without dashes, hidden entries left out (a hidden top entry with what is inside it) |

@@ -287,6 +287,17 @@
     <string name="view_settings">Ansichtseinstellungen</string>
     <string name="edit_views_in_notion">Ansichten in Notion bearbeiten</string>
     <string name="more_in_notion">Weitere Optionen in Notion</string>
+    <!-- Trash (undo and the Trash list) -->
+    <string name="trash_moved">In den Papierkorb verschoben</string>
+    <string name="section_trash">Notizen und Seiten</string>
+    <string name="settings_trash">Papierkorb</string>
+    <string name="settings_trash_summary">Stelle wieder her, was du in den letzten 30 Tagen in Notion in den Papierkorb verschoben hast.</string>
+    <string name="trash_empty_title">Der Papierkorb ist leer</string>
+    <string name="trash_empty_body">Seiten, die du in Notion in den Papierkorb verschiebst, erscheinen hier 30 Tage lang.</string>
+    <string name="trash_restore">Wiederherstellen</string>
+    <string name="trash_restored">Wiederhergestellt</string>
+    <string name="trash_restore_failed">Wiederherstellen fehlgeschlagen: %1$s</string>
+    <string name="trash_in">In %1$s</string>
     <string name="action_move_to">Verschieben nach…</string>
     <string name="move_kind_page">Seite</string>
     <string name="move_kind_database">Datenbank</string>
