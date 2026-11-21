@@ -115,11 +115,32 @@ class BlockCodecTest {
         assertEquals(true, table.headerRow)
         val rows = BlockCodec.tableRows(
             listOf(
-                Json.parseToJsonElement("""{"type":"table_row","table_row":{"cells":[[{"plain_text":"Name"}],[{"plain_text":"Age"}]]}}""").jsonObject,
-                Json.parseToJsonElement("""{"type":"table_row","table_row":{"cells":[[{"plain_text":"Ann"}],[]]}}""").jsonObject,
+                Json.parseToJsonElement("""{"id":"r0","type":"table_row","table_row":{"cells":[[{"plain_text":"Name"}],[{"plain_text":"Age"}]]}}""").jsonObject,
+                Json.parseToJsonElement("""{"id":"r1","type":"table_row","table_row":{"cells":[[{"plain_text":"Ann"}],[]]}}""").jsonObject,
             ),
         )
-        assertEquals(listOf(listOf("Name", "Age"), listOf("Ann", "")), rows)
+        assertEquals(listOf("r0", "r1"), rows.map { it.id })
+        assertEquals(listOf(listOf("Name", "Age"), listOf("Ann", "")), rows.map { it.cells })
+    }
+
+    @Test
+    fun `table cells keep their formatting and mentions and a row is sent whole`() {
+        val row = Json.parseToJsonElement(
+            """{"id":"r1","type":"table_row","table_row":{"cells":[
+                [{"type":"text","plain_text":"Bold","text":{"content":"Bold"},"annotations":{"bold":true}}],
+                [{"type":"mention","plain_text":"@Ann","mention":{"type":"user","user":{"id":"u1"}},"annotations":{}}],
+                []]}}""",
+        ).jsonObject
+        val cells = BlockCodec.tableRows(listOf(row)).single().cells
+        assertEquals("**Bold**", cells[0])
+        // Only the first cell is edited: the others go back as Notion had them.
+        val request = BlockCodec.tableRowRequest(listOf("Changed") + cells.drop(1))
+        @Suppress("UNCHECKED_CAST")
+        val sent = (request["table_row"] as Map<String, Any?>)["cells"] as List<List<Map<String, Any?>>>
+        assertEquals(3, sent.size)
+        assertEquals(mapOf("content" to "Changed", "link" to null), sent[0].single()["text"])
+        assertEquals("""{"type":"mention","mention":{"type":"user","user":{"id":"u1"}},"annotations":{}}""", sent[1].single().toString().replace(" ", ""))
+        assertEquals(emptyList<Any>(), sent[2])
     }
 
     @Test

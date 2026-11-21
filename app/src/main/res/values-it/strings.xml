@@ -69,6 +69,8 @@
     <string name="block_linked_page">Pagina collegata</string>
     <string name="block_equation">Equazione</string>
     <string name="block_table_of_contents">Sommario</string>
+    <string name="table_edit_cell">Modifica cella</string>
+    <string name="table_edit_hint">Righe e colonne si aggiungono in Notion.</string>
     <string name="type_text">Testo</string>
     <string name="type_h1">Intestazione 1</string>
     <string name="type_h2">Intestazione 2</string>

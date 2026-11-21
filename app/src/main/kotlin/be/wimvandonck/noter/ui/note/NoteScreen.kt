@@ -699,6 +699,7 @@ fun NoteScreen(
                             headings = headings,
                             onOpenPage = { id -> viewModel.openLinkedPage(id, onOpenNote) },
                             onOpenDatabase = onOpenDatabase,
+                            onEditCell = { row, column, text -> viewModel.editTableCell(block.key, row, column, text) },
                             nested = state.nested,
                             editable = state.editable,
                             onOpenInNotion = block.notionId?.takeIf { !note.isLocal }?.let { blockId ->
@@ -989,6 +990,7 @@ private fun BlockRow(
     headings: List<Block>,
     onOpenPage: (String) -> Unit,
     onOpenDatabase: (String) -> Unit,
+    onEditCell: (row: Int, column: Int, text: String) -> Unit,
     nested: NestedContent.State,
     editable: Boolean,
     onOpenInNotion: (() -> Unit)?,
@@ -1002,7 +1004,7 @@ private fun BlockRow(
                 block.rawType == Columns.TAB -> TabLabel(block)
                 // Columns whose content is shown here: a column list only holds its columns, and a
                 // column starts with a thin line (after the first). Deeper ones are opened in Notion.
-                block.hasChildren || !Columns.isContainer(block) -> ReadOnlyBlock(block, headings, onOpenPage, onOpenDatabase, onOpenInNotion)
+                block.hasChildren || !Columns.isContainer(block) -> ReadOnlyBlock(block, headings, onOpenPage, onOpenDatabase, onOpenInNotion, onEditCell.takeIf { editable })
                 block.rawType == Columns.COLUMN -> ColumnStart(first = previousRawType == Columns.LIST)
                 else -> Unit
             }

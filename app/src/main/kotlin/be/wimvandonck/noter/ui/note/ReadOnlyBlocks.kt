@@ -34,7 +34,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +62,8 @@ import be.wimvandonck.noter.R
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
 import be.wimvandonck.noter.data.notion.InlineMarkdown
+import be.wimvandonck.noter.data.notion.InlineTokens
+import be.wimvandonck.noter.logic.TableCells
 import be.wimvandonck.noter.logic.ReadOnlyBlocks
 import be.wimvandonck.noter.ui.common.NotionImage
 import be.wimvandonck.noter.ui.theme.AppShapes
@@ -68,6 +81,8 @@ fun ReadOnlyBlock(
     onOpenDatabase: (String) -> Unit,
     /** Opens the block in Notion (null for a note Notion doesn't have yet). */
     onOpenInNotion: (() -> Unit)? = null,
+    /** Changes a table cell (row, column, new Markdown); null: the cells can't be edited now. */
+    onEditCell: ((row: Int, column: Int, text: String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val open: (String) -> Unit = { link -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, link.toUri())) } }
@@ -124,7 +139,11 @@ fun ReadOnlyBlock(
         }
         "table" -> {
             val rows = block.rows
-            if (rows.isNullOrEmpty()) Fallback(block, onOpenInNotion) else Table(rows, block.headerRow)
+            if (rows.isNullOrEmpty()) {
+                Fallback(block, onOpenInNotion)
+            } else {
+                Table(rows, block.headerRow, onEditCell?.takeIf { TableCells.editable(block) })
+            }
         }
         "table_of_contents" -> if (headings.isNotEmpty()) TableOfContents(headings) else Unit
         // Notion's path to the page: the app has its own back arrow.
@@ -184,9 +203,17 @@ private fun LinkRow(
 
 /** A table as a grid that scrolls sideways when it is wider than the screen. */
 @Composable
-private fun Table(rows: List<List<String>>, headerRow: Boolean) {
+private fun Table(rows: List<List<String>>, headerRow: Boolean, onEditCell: ((row: Int, column: Int, text: String) -> Unit)?) {
     val outline = MaterialTheme.colorScheme.outlineVariant
     val columns = rows.maxOf { it.size }
+    var editing by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    editing?.let { (r, c) ->
+        val stored = rows.getOrNull(r)?.getOrNull(c).orEmpty()
+        CellDialog(stored, onDismiss = { editing = null }, onSave = { text ->
+            editing = null
+            onEditCell?.invoke(r, c, text)
+        })
+    }
     Column(
         Modifier
             .padding(top = 6.dp, bottom = 6.dp, end = 8.dp)
@@ -204,12 +231,57 @@ private fun Table(rows: List<List<String>>, headerRow: Boolean) {
                         InlineMarkdown.stripped(row.getOrElse(c) { "" }),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (header) FontWeight.SemiBold else null,
-                        modifier = Modifier.widthIn(min = 72.dp, max = 240.dp).padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier
+                            .then(
+                                if (onEditCell != null) {
+                                    Modifier.clickable(onClickLabel = stringResource(R.string.table_edit_cell)) { editing = r to c }
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .widthIn(min = 72.dp, max = 240.dp)
+                            .heightIn(min = 40.dp)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                     )
                 }
             }
         }
     }
+}
+
+/** Edits one table cell: its text as in the editor (mentions as their name), Markdown typed as is. */
+@Composable
+private fun CellDialog(stored: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var current by remember { mutableStateOf(stored) }
+    var value by remember { mutableStateOf(TextFieldValue(InlineTokens.display(stored), TextRange(InlineTokens.displayLength(stored)))) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.table_edit_cell)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { new ->
+                        val edit = InlineTokens.edit(current, new.text, new.selection.start)
+                        current = edit.stored
+                        value = TextFieldValue(edit.display, TextRange(edit.cursor))
+                    },
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    maxLines = 6,
+                )
+                Text(
+                    stringResource(R.string.table_edit_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(current) }) { Text(stringResource(R.string.action_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 @Composable

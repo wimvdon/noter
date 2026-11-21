@@ -32,6 +32,7 @@ import be.wimvandonck.noter.logic.NestedContent
 import be.wimvandonck.noter.logic.NotionViews
 import be.wimvandonck.noter.logic.PropertyLayouts
 import be.wimvandonck.noter.logic.QuickActions
+import be.wimvandonck.noter.logic.TableCells
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import be.wimvandonck.noter.logic.Workspace
@@ -223,6 +224,18 @@ class NoteViewModel(
         if (!editable()) return
         blocks.value = editor.toggleChecked(blocks.value, key)
         scheduleSave(fast = true)
+    }
+
+    /** Sets one cell of a table to [text] (Markdown); the row goes to Notion like any edit. */
+    fun editTableCell(key: String, row: Int, column: Int, text: String) {
+        if (!editable()) return
+        val block = blocks.value.firstOrNull { it.key == key }?.takeIf { TableCells.editable(it) } ?: return
+        val edited = TableCells.withCell(block, row, column, text)
+        if (edited == block) return
+        editedSinceOpen = true
+        blocks.value = blocks.value.map { if (it.key == key) edited else it }
+        val rowId = block.rowIds?.getOrNull(row) ?: return
+        viewModelScope.launch { repository.setTableRow(pageId, rowId, TableCells.rowCells(edited, row)) }
     }
 
     fun delete(key: String) = apply(editor.delete(blocks.value, key))

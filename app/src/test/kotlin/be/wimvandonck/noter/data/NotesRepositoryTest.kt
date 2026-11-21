@@ -210,7 +210,7 @@ class NotesRepositoryTest {
                     """{"id":"tbl","type":"table","has_children":true,"table":{"table_width":1,"has_column_header":false}}""",
                 )
                 sent.path.startsWith("/blocks/tbl/children") ->
-                    200 to FakeNotion.list("""{"type":"table_row","table_row":{"cells":[[{"plain_text":"A1"}]]}}""")
+                    200 to FakeNotion.list("""{"id":"row-1","type":"table_row","table_row":{"cells":[[{"plain_text":"A1"}]]}}""")
                 else -> 200 to "{}"
             }
         }
@@ -323,6 +323,76 @@ class NotesRepositoryTest {
         assertEquals(2, blocks.size)
         assertEquals(0, repo.pendingCount.first())
         assertEquals("new-1", repo.cachedContent("page-1")?.blocks?.last()?.notionId)
+    }
+
+    private val tableBlock =
+        """{"object":"block","id":"tbl","type":"table","has_children":true,"table":{"table_width":2,"has_column_header":true}}"""
+
+    private fun tableRow(id: String, vararg cells: String) =
+        """{"object":"block","id":"$id","type":"table_row","table_row":{"cells":[${cells.joinToString(",") { cell ->
+            """[{"type":"text","plain_text":"$cell","text":{"content":"$cell"},"annotations":{}}]"""
+        }}]}}"""
+
+    private fun notionWithTable() {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list(FakeNotion.page("page-1", "db", "List"))
+                sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
+                sent.path == "/pages/page-1" -> 200 to FakeNotion.page("page-1", "db", "List")
+                sent.method == "GET" && sent.path.startsWith("/blocks/page-1/children") -> 200 to FakeNotion.list(tableBlock)
+                sent.method == "GET" && sent.path.startsWith("/blocks/tbl/children") ->
+                    200 to FakeNotion.list(tableRow("r0", "Name", "Age"), tableRow("r1", "Ann", "30"))
+                else -> 200 to "{}"
+            }
+        }
+    }
+
+    @Test
+    fun `a table is downloaded with its row IDs and an edited row is sent to Notion`() = runBlocking {
+        notionWithTable()
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+        val table = checkNotNull(repo.fetchContent("page-1")).blocks.single()
+        assertEquals(listOf("r0", "r1"), table.rowIds)
+
+        repo.setTableRow("page-1", "r1", listOf("Anne", "30"))
+        // Shown at once from the copy on the phone.
+        assertEquals(listOf("Anne", "30"), repo.cachedContent("page-1")?.blocks?.single()?.rows?.get(1))
+        repo.flush()
+
+        val patch = notion.requests.single { it.method == "PATCH" && it.path == "/blocks/r1" }
+        assertTrue(patch.body, patch.body.contains("\"table_row\"") && patch.body.contains("\"Anne\"") && patch.body.contains("\"30\""))
+        assertEquals(0, repo.pendingCount.first())
+    }
+
+    @Test
+    fun `a table row edited while offline waits and survives a refresh`() = runBlocking {
+        notionWithTable()
+        val repo = repository()
+        repo.refresh("db", userAsked = true)
+        checkNotNull(repo.fetchContent("page-1"))
+        notion.respond = { sent -> if (sent.method == "PATCH") 502 to "{}" else 200 to FakeNotion.list(tableRow("r0", "Name", "Age"), tableRow("r1", "Ann", "30")) }
+
+        repo.setTableRow("page-1", "r1", listOf("Anne", "30"))
+        repo.flush()
+
+        assertEquals(1, repo.pendingCount.first())
+        assertEquals(listOf("Anne", "30"), repo.cachedContent("page-1")?.blocks?.single()?.rows?.get(1))
+    }
+
+    @Test
+    fun `a cached table without row IDs is downloaded again`() = runBlocking {
+        notionWithTable()
+        val cache = CacheStore(folder.newFolder("cache-old"))
+        val repo = repository(cache = cache)
+        repo.refresh("db", userAsked = true)
+        val fresh = checkNotNull(repo.fetchContent("page-1"))
+        val old = fresh.copy(blocks = fresh.blocks.map { it.copy(rowIds = null) })
+        cache.saveContent(old)
+
+        val again = checkNotNull(repo.fetchContent("page-1"))
+
+        assertEquals(listOf("r0", "r1"), again.blocks.single().rowIds)
     }
 
     @Test
