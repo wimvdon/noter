@@ -846,7 +846,10 @@ class NotesRepositoryTest {
         assertTrue(notion.requests.none { it.method == "PATCH" })
         applied = true
         withTimeout(5_000) { replaced.join() }
-        withTimeout(5_000) { while (repo.pendingCount.first() > 0) kotlinx.coroutines.delay(20) }
+        // The held-back lines are queued once the template is in (after the event), so wait for them to be sent.
+        withTimeout(5_000) {
+            while (notion.requests.none { it.method == "PATCH" } || repo.pendingCount.first() > 0) kotlinx.coroutines.delay(20)
+        }
 
         assertEquals(listOf("Agenda", "Call Sam"), repo.cachedContent("page-1")?.blocks?.map { it.text })
         val appends = notion.requests.filter { it.method == "PATCH" && it.path == "/blocks/page-1/children" }
