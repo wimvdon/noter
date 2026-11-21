@@ -190,7 +190,7 @@ fun EditDatabaseScreen(
                             Text(stringResource(R.string.new_database_add_property))
                         }
                         DropdownMenu(expanded = choosingKind, onDismissRequest = { choosingKind = false }) {
-                            PropertyKind.entries.forEach { kind ->
+                            PropertyKind.entries.filter { it != PropertyKind.STATUS }.forEach { kind ->
                                 DropdownMenuItem(
                                     text = { Text(names.getValue(kind)) },
                                     onClick = {

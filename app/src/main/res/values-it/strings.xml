@@ -190,7 +190,7 @@
     <string name="new_database_in_page">Nuovo database in questa pagina</string>
     <string name="new_database_at_top">Nuovo database in cima</string>
     <string name="new_database_name">Nome del database</string>
-    <string name="new_database_properties">Le sue proprietà oltre al nome. Opzioni, formati e viste si impostano in Notion.</string>
+    <string name="new_database_properties">Le sue proprietà oltre al nome. Formati e viste si impostano in Notion.</string>
     <string name="new_database_tags">Tag</string>
     <string name="new_database_title_property">Nome</string>
     <string name="new_database_create">Crea</string>
@@ -198,7 +198,7 @@
     <string name="action_rename">Rinomina</string>
     <string name="edit_database">Modifica database</string>
     <string name="action_save">Salva</string>
-    <string name="edit_database_properties">Proprietà. Opzioni, formati e viste si impostano in Notion.</string>
+    <string name="edit_database_properties">Proprietà. Formati e viste si impostano in Notion.</string>
     <string name="remove_properties_title">Rimuovere le proprietà?</string>
     <string name="remove_properties_body">%1$s e i loro valori su ogni pagina vengono eliminati in Notion.</string>
     <string name="remove_and_save">Rimuovi e salva</string>
@@ -228,6 +228,13 @@
     <string name="new_database_add_property">Aggiungi proprietà</string>
     <string name="new_database_remove_property">Rimuovi %1$s</string>
     <string name="new_database_created">Database creato. Aprilo in Notion per modificarne le viste.</string>
+    <string name="new_database_starter_empty">Vuoto</string>
+    <string name="new_database_starter_tasks">Attività</string>
+    <string name="new_database_starter_projects">Progetti</string>
+    <string name="new_database_starter_hint">Notion aggiunge da sé le proprietà, come stato e date.</string>
+    <string name="new_database_options">Opzioni</string>
+    <string name="new_database_options_hint">Separale con virgole</string>
+    <string name="new_database_inline">Mostra dentro la pagina</string>
     <string name="action_hide_on_home">Nascondi</string>
     <string name="hide_on_home_title">Nascondere “%1$s”?</string>
     <string name="hide_on_home_body">Non comparirà più in Database e pagine. La ricerca lo trova ancora, e puoi mostrarlo di nuovo nelle impostazioni.</string>

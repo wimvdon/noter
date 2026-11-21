@@ -23,6 +23,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,6 +44,7 @@ import be.wimvandonck.noter.R
 import be.wimvandonck.noter.data.NotesRepository
 import be.wimvandonck.noter.data.api.NotionErrors
 import be.wimvandonck.noter.data.api.NotionException
+import be.wimvandonck.noter.logic.DatabaseStarter
 import be.wimvandonck.noter.logic.NewDatabases
 import be.wimvandonck.noter.logic.NewProperty
 import be.wimvandonck.noter.logic.PropertyKind
@@ -75,13 +80,21 @@ class DatabaseCreation(private val scope: CoroutineScope, private val repository
     }
 
     /** Asks Notion for the database; [onCreated] gets the ID to open it by. The dialog stays open with the error when it fails. */
-    fun create(title: String, titleName: String, properties: List<NewProperty>, names: Map<PropertyKind, String>, onCreated: (String) -> Unit) {
+    fun create(
+        title: String,
+        titleName: String,
+        properties: List<NewProperty>,
+        names: Map<PropertyKind, String>,
+        starter: DatabaseStarter,
+        inline: Boolean,
+        onCreated: (String) -> Unit,
+    ) {
         val target = _state.value ?: return
-        if (target.creating || title.isBlank()) return
+        if (target.creating || (title.isBlank() && starter == DatabaseStarter.EMPTY)) return
         _state.value = target.copy(creating = true, error = null)
         scope.launch {
             try {
-                val id = repository.createDatabase(NewDatabases.request(title, target.parentPageId, titleName, properties, names), target.workspace)
+                val id = repository.createDatabase(NewDatabases.request(title, target.parentPageId, titleName, properties, names, starter, inline), target.workspace)
                 _state.value = null
                 onCreated(id)
             } catch (e: NotionException) {
@@ -98,6 +111,7 @@ internal fun kindNames(): Map<PropertyKind, String> = mapOf(
     PropertyKind.NUMBER to stringResource(R.string.property_kind_number),
     PropertyKind.SELECT to stringResource(R.string.property_kind_select),
     PropertyKind.MULTI_SELECT to stringResource(R.string.property_kind_multi_select),
+    PropertyKind.STATUS to stringResource(R.string.property_kind_status),
     PropertyKind.DATE to stringResource(R.string.property_kind_date),
     PropertyKind.PERSON to stringResource(R.string.property_kind_person),
     PropertyKind.FILES to stringResource(R.string.property_kind_files),
@@ -111,21 +125,30 @@ internal fun kindNames(): Map<PropertyKind, String> = mapOf(
     PropertyKind.LAST_EDITED_BY to stringResource(R.string.property_kind_last_edited_by),
 )
 
-/** The properties being set up, kept across rotation as "KIND name" strings. */
+/** The properties being set up, kept across rotation as "KIND name options" strings. */
 private val PropertiesSaver = listSaver<List<NewProperty>, String>(
-    save = { list -> list.map { it.kind.name + "\u0000" + it.name } },
-    restore = { saved -> saved.mapNotNull { line -> line.split("\u0000", limit = 2).takeIf { it.size == 2 }?.let { NewProperty(PropertyKind.valueOf(it[0]), it[1]) } } },
+    save = { list -> list.map { it.kind.name + "\u0000" + it.name + "\u0000" + it.options } },
+    restore = { saved -> saved.mapNotNull { line -> line.split("\u0000", limit = 3).takeIf { it.size == 3 }?.let { NewProperty(PropertyKind.valueOf(it[0]), it[1], it[2]) } } },
 )
 
 /**
- * A database's name and its properties besides the title: Tags at first, as in Notion; Add
- * property adds one of any kind the API can make, named as Notion names it, several of a kind
- * allowed. Anything else (options, formats, views) is changed in Notion afterwards.
+ * A database's name and what it starts from: Empty (its properties besides the title: Tags at
+ * first, as in Notion; Add property adds one of any kind the API can make, named as Notion names
+ * it, several of a kind allowed, with starting options for a select) or one of Notion's Tasks and
+ * Projects, which come with their own properties. Inside a page it can show in the page. Anything
+ * else (formats, views) is changed in Notion afterwards.
  */
 @Composable
 fun NewDatabaseDialog(
     state: NewDatabaseState,
-    onCreate: (title: String, titleName: String, properties: List<NewProperty>, names: Map<PropertyKind, String>) -> Unit,
+    onCreate: (
+        title: String,
+        titleName: String,
+        properties: List<NewProperty>,
+        names: Map<PropertyKind, String>,
+        starter: DatabaseStarter,
+        inline: Boolean,
+    ) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val names = kindNames()
@@ -135,8 +158,15 @@ fun NewDatabaseDialog(
     var properties by rememberSaveable(stateSaver = PropertiesSaver) {
         mutableStateOf(NewDatabases.DEFAULT_KINDS.fold(emptyList<NewProperty>()) { list, kind -> NewDatabases.add(list, kind, tags, titleName) })
     }
+    var starter by rememberSaveable { mutableStateOf(DatabaseStarter.EMPTY) }
+    var inline by rememberSaveable { mutableStateOf(false) }
     var choosingKind by remember { mutableStateOf(false) }
     val enabled = !state.creating
+    val starterNames = mapOf(
+        DatabaseStarter.EMPTY to stringResource(R.string.new_database_starter_empty),
+        DatabaseStarter.TASKS to stringResource(R.string.new_database_starter_tasks),
+        DatabaseStarter.PROJECTS to stringResource(R.string.new_database_starter_projects),
+    )
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.new_database)) },
@@ -146,31 +176,63 @@ fun NewDatabaseDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text(stringResource(R.string.new_database_name)) },
+                    placeholder = if (starter != DatabaseStarter.EMPTY) ({ Text(starterNames.getValue(starter)) }) else null,
                     singleLine = true,
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text(
-                    stringResource(R.string.new_database_properties),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                properties.forEachIndexed { index, property ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = property.name,
-                            onValueChange = { name -> properties = properties.toMutableList().also { it[index] = property.copy(name = name) } },
-                            label = { Text(names.getValue(property.kind)) },
-                            singleLine = true,
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    DatabaseStarter.entries.forEachIndexed { index, option ->
+                        SegmentedButton(
+                            selected = starter == option,
+                            onClick = { starter = option },
+                            shape = SegmentedButtonDefaults.itemShape(index, DatabaseStarter.entries.size),
                             enabled = enabled,
-                            modifier = Modifier.weight(1f),
-                        )
+                        ) { Text(starterNames.getValue(option)) }
+                    }
+                }
+                if (starter != DatabaseStarter.EMPTY) {
+                    Text(
+                        stringResource(R.string.new_database_starter_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        stringResource(R.string.new_database_properties),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (starter == DatabaseStarter.EMPTY) properties.forEachIndexed { index, property ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedTextField(
+                                value = property.name,
+                                onValueChange = { name -> properties = properties.toMutableList().also { it[index] = property.copy(name = name) } },
+                                label = { Text(names.getValue(property.kind)) },
+                                singleLine = true,
+                                enabled = enabled,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (property.takesOptions) {
+                                OutlinedTextField(
+                                    value = property.options,
+                                    onValueChange = { text -> properties = properties.toMutableList().also { it[index] = property.copy(options = text) } },
+                                    label = { Text(stringResource(R.string.new_database_options)) },
+                                    placeholder = { Text(stringResource(R.string.new_database_options_hint)) },
+                                    singleLine = true,
+                                    enabled = enabled,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
                         IconButton(onClick = { properties = properties.filterIndexed { i, _ -> i != index } }, enabled = enabled) {
                             Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.new_database_remove_property, property.name))
                         }
                     }
                 }
-                Box {
+                if (starter == DatabaseStarter.EMPTY) Box {
                     TextButton(onClick = { choosingKind = true }, enabled = enabled) {
                         Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -188,6 +250,16 @@ fun NewDatabaseDialog(
                         }
                     }
                 }
+                if (state.parentPageId != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.new_database_inline),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(checked = inline, onCheckedChange = { inline = it }, enabled = enabled)
+                    }
+                }
                 state.error?.let {
                     Text(
                         stringResource(R.string.new_database_failed, errorText(it)),
@@ -198,7 +270,10 @@ fun NewDatabaseDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onCreate(title, titleName, properties, names) }, enabled = title.isNotBlank() && enabled) {
+            TextButton(
+                onClick = { onCreate(title, titleName, properties, names, starter, inline) },
+                enabled = (title.isNotBlank() || starter != DatabaseStarter.EMPTY) && enabled,
+            ) {
                 if (state.creating) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))

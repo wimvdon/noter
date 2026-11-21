@@ -195,8 +195,8 @@ fun NoteScreen(
         val context = LocalContext.current
         NewDatabaseDialog(
             dialog,
-            onCreate = { title, titleName, properties, names ->
-                viewModel.newDatabase.create(title, titleName, properties, names) { id ->
+            onCreate = { title, titleName, properties, names, starter, inline ->
+                viewModel.newDatabase.create(title, titleName, properties, names, starter, inline) { id ->
                     showDatabaseCreatedToast(context)
                     onOpenDatabase(id)
                 }
