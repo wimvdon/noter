@@ -1423,7 +1423,7 @@ class NotesRepository(
                 }
             }
             val started = clock()
-            setViews(sourceId) { old -> old.copy(views = views, fetchedMs = started, results = old.results.filterKeys { id -> views.any { it.id == id } }) }
+            setViews(sourceId) { old -> old.copy(views = views, fetchedMs = started, results = old.results.filterKeys { key -> views.any { it.id == NotionViews.viewOf(key) } }) }
             setStatus(sourceId, ViewStatus())
             _offline.value = false
         } catch (e: NotionException) {
@@ -1438,15 +1438,18 @@ class NotesRepository(
     /**
      * Asks Notion which notes Notion view [viewId] of data source [sourceId] shows, in its order,
      * when the last answer is older than a minute (or [force]). Its notes themselves are the data
-     * source's, kept here already; only their IDs come back.
+     * source's, kept here already; only their IDs come back. With quick filters on ([quick]:
+     * conditions by property) they are asked with those too, and kept apart per combination
+     * (see [NotionViews.resultKey]).
      */
-    suspend fun refreshViewResults(sourceId: String, viewId: String, force: Boolean = false) = withContext(Dispatchers.IO) {
+    suspend fun refreshViewResults(sourceId: String, viewId: String, force: Boolean = false, quick: Map<String, JsonObject> = emptyMap()) = withContext(Dispatchers.IO) {
         if (!hasKey()) return@withContext
         val entry = _views.value[sourceId] ?: return@withContext
         val view = entry.views.firstOrNull { it.id == viewId } ?: return@withContext
-        val known = entry.results[viewId]
+        val resultKey = NotionViews.resultKey(viewId, quick)
+        val known = entry.results[resultKey]
         if (!force && known != null && clock() - known.fetchedMs < VIEW_RESULTS_TTL_MS) return@withContext
-        val asking = "$sourceId/$viewId"
+        val asking = "$sourceId/$resultKey"
         if (!synchronized(viewsAsking) { viewsAsking.add(asking) }) return@withContext
         setStatus(asking, ViewStatus(asking = true))
         try {
@@ -1454,18 +1457,11 @@ class NotesRepository(
             // Sorts name properties by name: the data source's properties, asked when not known yet.
             val schema = _databases.value[sourceId]?.schema
                 ?: try { PropertyCodec.parseSchema(client.getDataSource(sourceId)) } catch (e: NotionException) { null }
-            val pages = try {
-                val (filter, sorts) = NotionViews.query(view, schema)
-                client.queryPageIds(sourceId, filter, sorts)
-            } catch (e: NotionException) {
-                // A quick filter Notion's query doesn't take: the view's own filter still applies.
-                if (e.status != 400 || view.quickFilters == null) throw e
-                val (filter, sorts) = NotionViews.query(view, schema, quickFilters = false)
-                client.queryPageIds(sourceId, filter, sorts)
-            }
+            val (filter, sorts) = NotionViews.query(view, schema, quick)
+            val pages = client.queryPageIds(sourceId, filter, sorts)
             val ids = pages.filterNot { PropertyCodec.isTrashed(it) }.mapNotNull { it.stringOrNull("id") }
             val result = ViewResult(ids, started, Instant.ofEpochMilli(started).toString())
-            setViews(sourceId) { it.copy(results = it.results + (viewId to result)) }
+            setViews(sourceId) { it.copy(results = it.results + (resultKey to result)) }
             setStatus(asking, ViewStatus())
             _offline.value = false
         } catch (e: NotionException) {

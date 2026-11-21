@@ -30,6 +30,10 @@ import be.wimvandonck.noter.logic.PropertyLayouts
 import be.wimvandonck.noter.logic.StatusDefaults
 import be.wimvandonck.noter.logic.QuickActions
 import be.wimvandonck.noter.logic.NotionViews
+import be.wimvandonck.noter.logic.QuickChip
+import be.wimvandonck.noter.logic.QuickChoice
+import be.wimvandonck.noter.logic.QuickFilters
+import kotlinx.serialization.json.JsonObject
 import be.wimvandonck.noter.logic.DatabaseSetups
 import be.wimvandonck.noter.data.ViewStatus
 import be.wimvandonck.noter.data.store.ViewsCache
@@ -69,6 +73,22 @@ data class DatabaseUiState(
     val views: List<NotionView> = emptyList(),
     /** The view shown (null: no views known yet). */
     val viewId: String? = null,
+    /** What the notes shown are kept under: the view, and the quick filters that are on (see NotionViews.resultKey). */
+    val resultKey: String? = null,
+    /** The view's quick filters, as chips in Notion's order. */
+    val chips: List<QuickChipState> = emptyList(),
+)
+
+/**
+ * A quick filter chip: what it says ([label]), whether it is [on], and what it can be set to
+ * ([choices]) while it has no value. Chips can't be changed while [enabled] is false (offline).
+ */
+data class QuickChipState(
+    val chip: QuickChip,
+    val label: String,
+    val on: Boolean,
+    val enabled: Boolean,
+    val choices: List<QuickChoice>,
 )
 
 /**
@@ -102,6 +122,12 @@ class DatabaseViewModel(
     hasKey: StateFlow<Boolean>,
 ) : ViewModel() {
     private val source = MutableStateFlow(openedId)
+
+    /** What the user changed in the quick filters, per "data source/view" while the app runs (never kept): a condition turns a chip on, QuickFilters.OFF turns it off. */
+    private val active = MutableStateFlow<Map<String, Map<String, JsonObject>>>(emptyMap())
+
+    /** The person the sign-in acts as, once a chip needed them. */
+    private val me = MutableStateFlow<NotionUser?>(null)
     private val sources = MutableStateFlow<List<PageRef>?>(null)
 
     /** The database's own name and icon, when Notion says (a database rather than a data source). */
@@ -124,10 +150,10 @@ class DatabaseViewModel(
 
     val state: StateFlow<DatabaseUiState> = combine(
         repository.settingsFlow(),
-        combine(repository.databases, combine(repository.views, repository.viewStatus, ::Views), ::Pair),
+        combine(repository.databases, combine(repository.views, repository.viewStatus, ::Views), combine(active, me, ::Pair), ::Triple),
         combine(source, sources, label, databaseLink, ::Shown),
         status,
-    ) { settings, (databases, views), (id, list, named, link), (pending, offline, key, missing) ->
+    ) { settings, (databases, views, picked), (id, list, named, link), (pending, offline, key, missing) ->
         val db = databases[id]
         val setup = DatabaseSetups.of(settings.setups, id)
         val sourceViews = views.all[id]
@@ -135,9 +161,16 @@ class DatabaseViewModel(
         val viewId = NotionViews.chosen(choiceOf(settings, id), shown)
         val viewShown = shown.firstOrNull { it.id == viewId }
         val listStatus = views.status[id]
-        val resultStatus = viewId?.let { views.status["$id/$it"] }
+        val (activeAll, person) = picked
+        val chipList = QuickFilters.chips(viewShown, db?.schema)
+        val quick = viewId?.let { QuickFilters.on(viewShown, db?.schema, activeAll["$id/$it"].orEmpty()) }.orEmpty()
+        // Offline, the notes with these chips on aren't on the phone: the view's own notes show, chips off.
+        val unfiltered = offline && viewId != null && quick.isNotEmpty() && sourceViews?.results?.containsKey(NotionViews.resultKey(viewId, quick)) != true
+        val on = if (unfiltered) emptyMap() else quick
+        val resultKey = viewId?.let { NotionViews.resultKey(it, on) }
+        val resultStatus = resultKey?.let { views.status["$id/$it"] }
         val members = when {
-            viewId != null -> members(sourceViews, viewId, db?.notes.orEmpty())
+            viewId != null -> members(sourceViews, resultKey!!, db?.notes.orEmpty())
             // Notion has no views of these notes to show (all of them forms or dashboards): every note, last edited first.
             sourceViews != null && sourceViews.fetchedMs > 0 -> db?.notes.orEmpty().sortedByDescending { it.lastEditedTime }.map { it.id }
             else -> null
@@ -176,6 +209,17 @@ class DatabaseViewModel(
             notionUrl = ReadOnlyBlocks.notionUrl(link ?: db?.schema?.databaseId ?: pinKey(id, list)),
             views = shown,
             viewId = viewId,
+            resultKey = resultKey,
+            chips = chipList.map { chip ->
+                val condition = on[chip.key]
+                QuickChipState(
+                    chip = chip,
+                    label = QuickFilters.label(chip, condition ?: chip.preset, person?.let { mapOf(it.id to it.name) }.orEmpty()),
+                    on = condition != null,
+                    enabled = !offline,
+                    choices = if (chip.preset == null) QuickFilters.choices(db?.schema?.properties?.firstOrNull { it.name == chip.name }) else emptyList(),
+                )
+            },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DatabaseUiState())
 
@@ -213,7 +257,7 @@ class DatabaseViewModel(
             combine(visible, repository.lastSentMs, ::Pair).collect { (shown, sent) ->
                 if (!shown) return@collect
                 val id = sourceId
-                val result = state.value.viewId?.let { repository.views.value[id]?.results?.get(it) }
+                val result = state.value.resultKey?.let { repository.views.value[id]?.results?.get(it) }
                 launch { openViews(id, forceResults = result != null && sent > result.fetchedMs) }
             }
         }
@@ -230,9 +274,9 @@ class DatabaseViewModel(
     /** Data source [id]'s Notion views that list its notes, in Notion's order. */
     private fun listedViews(views: ViewsCache?, id: String): List<NotionView> = NotionViews.listed(views?.views.orEmpty(), id)
 
-    /** The notes of Notion view [viewId] as last asked (null: not asked yet), with the ones made since. */
-    private fun members(views: ViewsCache?, viewId: String, notes: List<NoteSummary>): List<String>? {
-        val result = views?.results?.get(viewId) ?: return null
+    /** The notes kept under [resultKey] (see NotionViews.resultKey) as last asked (null: not asked yet), with the ones made since. */
+    private fun members(views: ViewsCache?, resultKey: String, notes: List<NoteSummary>): List<String>? {
+        val result = views?.results?.get(resultKey) ?: return null
         return NotionViews.members(result.ids, result.fetchedAt, notes.associate { it.id to it.createdTime })
     }
 
@@ -246,7 +290,37 @@ class DatabaseViewModel(
         val shown = listedViews(repository.views.value[id], id)
         val chosen = NotionViews.chosen(choiceOf(settings, id), shown) ?: return
         if (choiceOf(settings, id) != chosen) repository.chooseView(id, chosen)
-        repository.refreshViewResults(id, chosen, forceResults)
+        val view = shown.firstOrNull { it.id == chosen }
+        val quick = QuickFilters.on(view, repository.databases.value[id]?.schema, active.value["$id/$chosen"].orEmpty())
+        repository.refreshViewResults(id, chosen, forceResults, quick)
+    }
+
+    /** Taps chip [chip]: it goes off when it is on (for this session), else on with the condition it holds (chips without one use [chooseValue]). */
+    fun toggleChip(chip: QuickChip) {
+        if (state.value.chips.firstOrNull { it.chip.key == chip.key }?.on == true) setChip(chip.key, null) else chip.preset?.let { setChip(chip.key, it) }
+    }
+
+    /** Turns chip [chip] on with [choice] (the signed-in person is asked for first, when it is them). */
+    fun chooseValue(chip: QuickChip, choice: QuickChoice) {
+        val condition = choice.condition
+        if (condition != null) return setChip(chip.key, condition)
+        if (choice.kind != QuickChoice.Kind.ME) return
+        viewModelScope.launch {
+            val person = me.value ?: runCatching { repository.tokenInfo().owner }.getOrNull()?.also { me.value = it } ?: return@launch
+            setChip(chip.key, QuickFilters.person(person.id))
+        }
+    }
+
+    /** Turns the quick filter [key] of the view shown on with [condition], or off (null), and asks Notion for the notes that gives (kept per combination). */
+    private fun setChip(key: String, condition: JsonObject?) {
+        val ui = state.value
+        val viewId = ui.viewId ?: return
+        val id = ui.sourceId
+        val slot = "$id/$viewId"
+        val next = active.value[slot].orEmpty() + (key to (condition ?: QuickFilters.OFF))
+        active.update { it + (slot to next) }
+        val quick = QuickFilters.on(ui.views.firstOrNull { it.id == viewId }, schema(), next)
+        viewModelScope.launch { repository.refreshViewResults(id, viewId, false, quick) }
     }
 
     /** Shows Notion view [viewId], kept for next time. */

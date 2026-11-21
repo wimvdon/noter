@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -655,6 +657,41 @@ class NotesRepositoryTest {
         val asked = notion.requests.size
         repo.refreshViewResults("db", "v1")
         repo.openViews("db")
+        assertEquals(asked, notion.requests.size)
+    }
+
+    @Test
+    fun `a view's notes with a quick filter on are asked with it and kept apart`() = runBlocking {
+        notion.respond = { sent ->
+            when {
+                sent.path.startsWith("/views?database_id=dbase") -> 200 to FakeNotion.list("""{"object":"view","id":"v1"}""")
+                sent.path == "/data_sources/db" ->
+                    200 to """{"object":"data_source","id":"db","parent":{"type":"database_id","database_id":"dbase"},"title":[],"properties":{"Name":{"id":"title","name":"Name","type":"title","title":{}}}}"""
+                sent.path == "/views/v1" ->
+                    200 to """{"object":"view","id":"v1","name":"Open","type":"table","data_source_id":"db",
+                              "filter":{"property":"Done","checkbox":{"equals":false}},"quick_filters":{"Status":{"status":{"equals":"Doing"}}}}"""
+                sent.path.startsWith("/data_sources/db/query") ->
+                    if (sent.body.contains("Doing")) 200 to FakeNotion.list(FakeNotion.page("p2", "db")) else 200 to FakeNotion.list(FakeNotion.page("p2", "db"), FakeNotion.page("p1", "db"))
+                else -> 200 to "{}"
+            }
+        }
+        val repo = repository()
+        repo.openViews("db")
+        val doing = mapOf("Status" to (Json.parseToJsonElement("""{"status":{"equals":"Doing"}}""") as JsonObject))
+
+        repo.refreshViewResults("db", "v1")
+        assertFalse(notion.requests.last { it.path.startsWith("/data_sources/db/query") }.body.contains("Doing"))
+        repo.refreshViewResults("db", "v1", quick = doing)
+
+        val query = notion.requests.last { it.path.startsWith("/data_sources/db/query") }
+        assertTrue(query.body, query.body.contains(""""filter":{"and":[{"property":"Done","checkbox":{"equals":false}},{"property":"Status","status":{"equals":"Doing"}}]}"""))
+        val results = repo.views.value["db"]!!.results
+        assertEquals(listOf("p2", "p1"), results["v1"]!!.ids)
+        assertEquals(listOf("p2"), results[NotionViews.resultKey("v1", doing)]!!.ids)
+
+        // Turned on again within a minute: the copy kept for it is used.
+        val asked = notion.requests.size
+        repo.refreshViewResults("db", "v1", quick = doing)
         assertEquals(asked, notion.requests.size)
     }
 

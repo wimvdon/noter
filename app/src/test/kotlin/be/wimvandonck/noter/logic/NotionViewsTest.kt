@@ -5,7 +5,9 @@ import be.wimvandonck.noter.data.model.NotionView
 import be.wimvandonck.noter.data.model.PropertySchema
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -49,18 +51,41 @@ class NotionViewsTest {
     }
 
     @Test
-    fun `quick filters with a condition join the view's filter`() {
-        val quick = """{"Status":{"status":{"equals":"Doing"}},"Tag":{}}"""
-        val alone = NotionViews.query(view("1", quick = quick), schema).first
+    fun `quick filters that are on join the view's filter, the ones off are not sent`() {
+        val status = json("""{"status":{"equals":"Doing"}}""") as JsonObject
+        val quick = mapOf("Status" to status)
+        val v = { filter: String? -> view("1", filter = filter, quick = """{"Status":{"status":{"equals":"Doing"}},"Tag":{}}""") }
+        val alone = NotionViews.query(v(null), schema, quick).first
         assertEquals(json("""{"property":"Status","status":{"equals":"Doing"}}"""), alone)
 
-        val withAnd = NotionViews.query(view("1", filter = """{"and":[{"property":"Done","checkbox":{"equals":false}}]}""", quick = quick), schema).first
+        val withAnd = NotionViews.query(v("""{"and":[{"property":"Done","checkbox":{"equals":false}}]}"""), schema, quick).first
         assertEquals(json("""{"and":[{"property":"Done","checkbox":{"equals":false}},{"property":"Status","status":{"equals":"Doing"}}]}"""), withAnd)
 
-        val withOr = NotionViews.query(view("1", filter = """{"or":[{"property":"A","checkbox":{"equals":true}}]}""", quick = quick), schema).first
+        val withOr = NotionViews.query(v("""{"or":[{"property":"A","checkbox":{"equals":true}}]}"""), schema, quick).first
         assertEquals(json("""{"and":[{"or":[{"property":"A","checkbox":{"equals":true}}]},{"property":"Status","status":{"equals":"Doing"}}]}"""), withOr)
 
-        assertNull(NotionViews.query(view("1", quick = quick), schema, quickFilters = false).first)
+        val two = NotionViews.query(v("""{"property":"Done","checkbox":{"equals":false}}"""), schema, quick + ("Done" to (json("""{"checkbox":{"equals":true}}""") as JsonObject))).first
+        assertEquals(
+            json("""{"and":[{"property":"Done","checkbox":{"equals":false}},{"property":"Done","checkbox":{"equals":true}},{"property":"Status","status":{"equals":"Doing"}}]}"""),
+            two,
+        )
+
+        // Nothing on: the view's filter alone, whatever quick filters it has.
+        assertNull(NotionViews.query(v(null), schema).first)
+    }
+
+    @Test
+    fun `a view's notes are kept per combination of quick filters`() {
+        val a = json("""{"status":{"equals":"Doing"}}""") as JsonObject
+        val b = json("""{"checkbox":{"equals":true}}""") as JsonObject
+        assertEquals("v1", NotionViews.resultKey("v1"))
+        val key = NotionViews.resultKey("v1", mapOf("Status" to a, "Done" to b))
+        // The order the chips were turned on doesn't matter.
+        assertEquals(key, NotionViews.resultKey("v1", mapOf("Done" to b, "Status" to a)))
+        assertNotEquals(key, NotionViews.resultKey("v1", mapOf("Status" to a)))
+        assertNotEquals(NotionViews.resultKey("v1", mapOf("Status" to a)), NotionViews.resultKey("v1", mapOf("Status" to b)))
+        assertEquals("v1", NotionViews.viewOf(key))
+        assertEquals("v1", NotionViews.viewOf("v1"))
     }
 
     @Test

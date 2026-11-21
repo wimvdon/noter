@@ -258,6 +258,10 @@ fun DatabaseScreen(
                                 }
                             }
                         }
+                        // The view's quick filters (Notion's pinned filter pills).
+                        if (state.chips.isNotEmpty() && !content.sourceMissing) {
+                            QuickFilterRow(state.chips, onToggle = viewModel::toggleChip, onChoose = viewModel::chooseValue)
+                        }
                     }
                 }
             }
