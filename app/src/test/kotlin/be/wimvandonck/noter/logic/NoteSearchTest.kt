@@ -1,6 +1,7 @@
 package be.wimvandonck.noter.logic
 
 import be.wimvandonck.noter.data.model.NoteSummary
+import be.wimvandonck.noter.data.notion.InlineTokens
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -21,5 +22,13 @@ class NoteSearchTest {
     @Test
     fun `nothing typed finds nothing`() {
         assertEquals(emptyList<NoteSummary>(), NoteSearch.matches(listOf(note("1", "A", "")), "  "))
+    }
+
+    @Test
+    fun `a title with a mention is found by the mention's text, not its stored form`() {
+        val mention = InlineTokens.atom("""{"type":"mention","mention":{"type":"user","user":{"id":"u1"}}}""", "@Wim")
+        val notes = listOf(note("1", "Call $mention", "2026-10-01"))
+        assertEquals(listOf("1"), NoteSearch.matches(notes, "call wim").map { it.id })
+        assertEquals(emptyList<NoteSummary>(), NoteSearch.matches(notes, "mention"))
     }
 }

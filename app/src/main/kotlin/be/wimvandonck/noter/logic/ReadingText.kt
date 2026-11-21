@@ -3,6 +3,7 @@ package be.wimvandonck.noter.logic
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
 import be.wimvandonck.noter.data.notion.InlineMarkdown
+import be.wimvandonck.noter.data.notion.InlineTokens
 
 /** How a line looks in [ReadingText]. */
 enum class ReadingStyle { HEADING_1, HEADING_2, HEADING_3, BODY, QUOTE, CODE, DIVIDER }
@@ -19,7 +20,7 @@ object ReadingText {
         val numbers = DocumentEditor.numbers(blocks)
         return blocks.filter { it.type != BlockType.UNSUPPORTED }.map { block ->
             // Code keeps its characters as typed; elsewhere the Markdown marks go.
-            val text = if (block.type == BlockType.CODE) block.text else InlineMarkdown.stripped(block.text)
+            val text = if (block.type == BlockType.CODE) InlineTokens.display(block.text) else InlineMarkdown.stripped(block.text)
             val style = when (block.type) {
                 BlockType.HEADING_1 -> ReadingStyle.HEADING_1
                 BlockType.HEADING_2 -> ReadingStyle.HEADING_2

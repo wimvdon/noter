@@ -263,6 +263,16 @@ ViewModels (ui/*/…ViewModel) ── StateFlow<UiState> ── Composables
 - **Inline styles** (`data/notion/InlineMarkdown.kt`): bold, italic, strikethrough, inline code and
   links are kept as Markdown in the editor and turned back into Notion rich text. Code blocks keep
   their text literally.
+- **Mentions, equations and colours** (`data/notion/InlineTokens.kt`): what Markdown can't say is
+  kept in the same stored text with private-use characters, so it survives the cache, the diff and
+  splitting or joining lines. A mention or inline equation is an atom: the editor shows only its text
+  (link-coloured, `ui/note/MarkdownStyling.kt`) and writes it back as the same rich text item.
+  Deleting any part of it removes it whole; typing inside it goes after it. Colour and underline
+  are a span around their text; typed text joins the span before it, as in Notion. The text fields
+  (lines, title, text properties) show `InlineTokens.display` and turn each change back with
+  `InlineTokens.edit`; previews, search, Select text and Copy show the mention's text. A link
+  preview mention can't be written by the API and stays a link. Text stored before this has no
+  tokens and reads as before.
 - **Editing rules** (`logic/DocumentEditor.kt`): Enter, Backspace at the start of a line and the
   Markdown shortcuts, following Notion's own editor.
 - **Never twice** (`data/sync/BlockMatch.kt`): the editor keeps its own copy of the blocks and

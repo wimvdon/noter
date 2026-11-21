@@ -2,6 +2,7 @@ package be.wimvandonck.noter.logic
 
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
+import be.wimvandonck.noter.data.notion.InlineTokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -47,5 +48,16 @@ class BlockSelectionTest {
     fun `code is copied in a fence without indenting`() {
         val code = listOf(b("a", "val x = 1", BlockType.CODE, depth = 1))
         assertEquals("```\nval x = 1\n```", BlockSelection.asText(code, setOf("a")))
+    }
+
+    @Test
+    fun `mentions are copied as their text, without colour markers`() {
+        val mention = InlineTokens.atom("""{"type":"mention","mention":{"type":"page","page":{"id":"p"}}}""", "Groceries")
+        val red = InlineTokens.spanOpen("red", underline = false)
+        val lines = listOf(
+            b("a", "See $mention and ${red}**this**${InlineTokens.SPAN_CLOSE}", BlockType.BULLETED),
+            b("c", "x $mention", BlockType.CODE),
+        )
+        assertEquals("- See Groceries and **this**\n```\nx Groceries\n```", BlockSelection.asText(lines, setOf("a", "c")))
     }
 }

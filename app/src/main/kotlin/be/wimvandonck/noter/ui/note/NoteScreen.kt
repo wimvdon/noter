@@ -154,6 +154,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import be.wimvandonck.noter.data.notion.BlockCodec
 import be.wimvandonck.noter.data.notion.InlineMarkdown
+import be.wimvandonck.noter.data.notion.InlineTokens
 import be.wimvandonck.noter.logic.ReadingText
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -826,10 +827,19 @@ private fun Modifier.fullBleed(start: Dp, end: Dp): Modifier = layout { measurab
 
 @Composable
 private fun TitleField(note: NoteSummary, focusNow: Boolean, onFocused: () -> Unit, onChange: (String) -> Unit, onEnter: () -> Unit) {
-    var text by remember(note.id) { mutableStateOf(TextFieldValue(note.title)) }
+    // [stored] is the title as kept (with its mentions, see InlineTokens); the field shows [text].
+    var stored by remember(note.id) { mutableStateOf(note.title) }
+    var text by remember(note.id) { mutableStateOf(TextFieldValue(InlineTokens.display(note.title))) }
     var focused by remember { mutableStateOf(false) }
     val requester = remember { FocusRequester() }
-    LaunchedEffect(note.title) { if (!focused && note.title != text.text) text = TextFieldValue(note.title) }
+    LaunchedEffect(note.title) {
+        if (!focused && note.title != stored) {
+            stored = note.title
+            text = TextFieldValue(InlineTokens.display(note.title))
+        }
+    }
+    val mentions = remember(stored) { InlineTokens.layout(stored).atoms.map { it.start until it.end } }
+    val styling = MarkdownStyling(MaterialTheme.colorScheme.outline, MaterialTheme.colorScheme.primary, mentions, markdown = false)
     LaunchedEffect(focusNow) {
         // The title in the top bar was tapped: type in the title, at its end.
         if (!focusNow) return@LaunchedEffect
@@ -852,10 +862,16 @@ private fun TitleField(note: NoteSummary, focusNow: Boolean, onFocused: () -> Un
                 onEnter()
                 return@BasicTextField
             }
-            val changed = value.text != text.text
-            text = value
-            if (changed) onChange(value.text)
+            if (value.text == text.text) {
+                text = value
+                return@BasicTextField
+            }
+            val edit = InlineTokens.edit(stored, value.text, value.selection.start)
+            stored = edit.stored
+            text = if (edit.display == value.text) value else TextFieldValue(edit.display, TextRange(edit.cursor))
+            onChange(edit.stored)
         },
+        visualTransformation = styling,
         textStyle = MaterialTheme.typography.headlineMedium.copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -964,13 +980,16 @@ private fun BlockRow(
         }
         else -> Unit
     }
-    var value by remember(block.key) { mutableStateOf(TextFieldValue(block.text)) }
+    // The field shows the text without the stored parts of mentions and colours (see InlineTokens);
+    // its cursor positions are in the text it shows.
+    val shown = remember(block.text) { InlineTokens.layout(block.text) }
+    var value by remember(block.key) { mutableStateOf(TextFieldValue(shown.display)) }
     LaunchedEffect(block.text) {
-        if (value.text != block.text) value = TextFieldValue(block.text, TextRange(block.text.length.coerceAtMost(value.selection.end)))
+        if (value.text != shown.display) value = TextFieldValue(shown.display, TextRange(shown.display.length.coerceAtMost(value.selection.end)))
     }
     LaunchedEffect(focus) {
         if (focus?.key == block.key) {
-            value = TextFieldValue(block.text, TextRange(focus.cursor.coerceIn(0, block.text.length)))
+            value = TextFieldValue(shown.display, TextRange(focus.cursor.coerceIn(0, shown.display.length)))
             withFrameNanos { }
             runCatching { requester.requestFocus() }
         }
@@ -1040,18 +1059,24 @@ private fun BlockRow(
                 onValueChange = { new ->
                     if (new.text == value.text) {
                         value = new
-                    } else if (new.text.contains('\n') && block.type != BlockType.CODE) {
-                        onText(new.text, new.selection.start)
                     } else {
-                        value = new
-                        onText(new.text, new.selection.start)
+                        // A mention is removed whole when any of it is deleted (see InlineTokens).
+                        val edit = InlineTokens.edit(block.text, new.text, new.selection.start)
+                        if (!edit.stored.contains('\n') || block.type == BlockType.CODE) {
+                            value = if (edit.display == new.text) new else TextFieldValue(edit.display, TextRange(edit.cursor))
+                        }
+                        onText(edit.stored, edit.cursor)
                     }
                 },
                 textStyle = style,
                 readOnly = !editable,
                 cursorBrush = SolidColor(colors.primary),
                 // Code is shown exactly as typed: no Markdown styling.
-                visualTransformation = if (block.type == BlockType.CODE) VisualTransformation.None else styling,
+                visualTransformation = if (block.type == BlockType.CODE) {
+                    VisualTransformation.None
+                } else {
+                    remember(styling, shown) { styling.withMentions(shown.atoms.map { it.start until it.end }) }
+                },
                 keyboardOptions = if (block.type == BlockType.CODE) {
                     KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
                 } else {
@@ -1201,7 +1226,7 @@ private fun BarTitle(note: NoteSummary, onIcon: () -> Unit, onTitle: () -> Unit)
             )
         }
         Text(
-            note.title.ifBlank { stringResource(R.string.untitled) },
+            InlineMarkdown.stripped(note.title).ifBlank { stringResource(R.string.untitled) },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.clickable(onClickLabel = stringResource(R.string.action_rename), onClick = onTitle),
