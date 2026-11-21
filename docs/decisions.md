@@ -2,6 +2,17 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Options in Edit database, and a status' default
+
+Edit database now opens the options of a select, multi-select or status property (a chevron on its
+field): add one, change its colour, remove one (asks first, since notes lose that value) and, for
+a status, pick its group. They go out with Save in the same `PATCH /data_sources` as the other
+changes: the whole list to keep, existing options by ID. Notion's API doesn't rename an existing
+option (a name sent for a kept option is ignored; sending another name would delete it and lose
+the value on every note), so a hint says to rename in Notion; a newly added option's name can be
+typed until Save. A status' read-only `default_option` is read into the schema and shown for a note
+without a status, on its card and in the note, as Notion does. It is display only, never written.
+
 ## 2026-11-21: New notes use the data source's page templates
 
 A new note in a database gets its default template, as in Notion (`template: default` with the

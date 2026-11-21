@@ -198,7 +198,7 @@
     <string name="action_rename">Rename</string>
     <string name="edit_database">Edit database</string>
     <string name="action_save">Save</string>
-    <string name="edit_database_properties">Properties. Formats and views are set in Notion.</string>
+    <string name="edit_database_properties">Properties and their options. Formats and views are set in Notion.</string>
     <string name="remove_properties_title">Remove properties?</string>
     <string name="remove_properties_body">%1$s and their values on every page are deleted in Notion.</string>
     <string name="remove_and_save">Remove and save</string>
@@ -287,4 +287,26 @@
     <string name="view_settings">View settings</string>
     <string name="edit_views_in_notion">Edit views in Notion</string>
     <string name="more_in_notion">More options in Notion</string>
+    <string name="options_of">Options of %1$s</string>
+    <string name="option_add">Add option</string>
+    <string name="option_name">Option name</string>
+    <string name="option_remove">Remove option %1$s</string>
+    <string name="option_color">Color of %1$s</string>
+    <string name="option_group">Group</string>
+    <string name="option_group_todo">To-do</string>
+    <string name="option_group_progress">In progress</string>
+    <string name="option_group_complete">Complete</string>
+    <string name="option_rename_hint">To rename an option, use Notion.</string>
+    <string name="remove_options_title">Remove options?</string>
+    <string name="remove_options_body">%1$s are removed in Notion. Notes that have them lose that value.</string>
+    <string name="notion_color_default">Default</string>
+    <string name="notion_color_gray">Gray</string>
+    <string name="notion_color_brown">Brown</string>
+    <string name="notion_color_orange">Orange</string>
+    <string name="notion_color_yellow">Yellow</string>
+    <string name="notion_color_green">Green</string>
+    <string name="notion_color_blue">Blue</string>
+    <string name="notion_color_purple">Purple</string>
+    <string name="notion_color_pink">Pink</string>
+    <string name="notion_color_red">Red</string>
 </resources>

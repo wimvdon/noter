@@ -20,6 +20,8 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddReaction
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -50,6 +52,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import be.wimvandonck.noter.R
 import be.wimvandonck.noter.data.model.PageIcon
+import be.wimvandonck.noter.data.model.SelectOption
 import be.wimvandonck.noter.logic.EditedProperty
 import be.wimvandonck.noter.logic.PropertyKind
 import be.wimvandonck.noter.logic.SchemaEdits
@@ -61,15 +64,38 @@ import be.wimvandonck.noter.ui.theme.AppShapes
 
 /** The properties being edited, kept across rotation as "id, name, type, kind" strings. */
 private val EditedSaver = listSaver<List<EditedProperty>, String>(
-    save = { list -> list.map { listOf(it.id.orEmpty(), it.name, it.type, it.kind?.name.orEmpty()).joinToString("\u0000") } },
+    save = { list ->
+        list.map {
+            listOf(it.id.orEmpty(), it.name, it.type, it.kind?.name.orEmpty(), saveOptions(it.options)).joinToString("\u0000")
+        }
+    },
     restore = { saved ->
         saved.mapNotNull { line ->
-            line.split("\u0000").takeIf { it.size == 4 }?.let { (id, name, type, kind) ->
-                EditedProperty(id.ifBlank { null }, name, type, kind.ifBlank { null }?.let(PropertyKind::valueOf))
+            line.split("\u0000").takeIf { it.size == 5 }?.let { (id, name, type, kind, options) ->
+                EditedProperty(id.ifBlank { null }, name, type, kind.ifBlank { null }?.let(PropertyKind::valueOf), restoreOptions(options))
             }
         }
     },
 )
+
+/** Options as text: "N" for none, else "L" and each option's ID, name, color and group. */
+private fun saveOptions(options: List<SelectOption>?): String =
+    if (options == null) {
+        "N"
+    } else {
+        "L" + options.joinToString("\u0003") { listOf(it.id.orEmpty(), it.name, it.color, it.group.orEmpty()).joinToString("\u0002") }
+    }
+
+private fun restoreOptions(text: String): List<SelectOption>? =
+    if (!text.startsWith("L")) {
+        null
+    } else {
+        text.drop(1).split("\u0003").filter { it.isNotEmpty() }.mapNotNull { line ->
+            line.split("\u0002").takeIf { it.size == 4 }?.let { (id, name, color, group) ->
+                SelectOption(name, color, id.ifBlank { null }, group.ifBlank { null })
+            }
+        }
+    }
 
 /**
  * Edit database (⋮, or a tap on the database's name or icon): its icon, its name and the data
@@ -97,8 +123,10 @@ fun EditDatabaseScreen(
     var choosingIcon by remember { mutableStateOf(false) }
     var choosingKind by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf(false) }
+    var opened by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val enabled = !state.saving
     val removed = properties.filter { p -> edited.none { it.id == p.id } }.map { it.name }
+    val lostOptions = SchemaEdits.removedOptions(properties, edited)
     val save = { onSave(name, emoji, iconChanged, edited, names) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -112,7 +140,7 @@ fun EditDatabaseScreen(
                         }
                     },
                     actions = {
-                        TextButton(onClick = { if (removed.isEmpty()) save() else confirming = true }, enabled = enabled && name.isNotBlank()) {
+                        TextButton(onClick = { if (removed.isEmpty() && lostOptions.isEmpty()) save() else confirming = true }, enabled = enabled && name.isNotBlank()) {
                             if (state.saving) {
                                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.width(8.dp))
@@ -173,6 +201,22 @@ fun EditDatabaseScreen(
                                 enabled = enabled,
                                 modifier = Modifier.weight(1f),
                             )
+                            val options = property.options
+                            if (options != null && property.id != null) {
+                                val open = property.id in opened
+                                IconButton(
+                                    onClick = { opened = if (open) opened - property.id else opened + property.id },
+                                    enabled = enabled,
+                                ) {
+                                    Icon(
+                                        if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                        contentDescription = stringResource(R.string.options_of, property.name),
+                                    )
+                                }
+                            } else {
+                                // Properties without options: the same room, so the fields line up.
+                                Spacer(Modifier.size(48.dp))
+                            }
                             if (property.removable) {
                                 IconButton(onClick = { edited = edited.filterIndexed { i, _ -> i != index } }, enabled = enabled) {
                                     Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.new_database_remove_property, property.name))
@@ -181,6 +225,15 @@ fun EditDatabaseScreen(
                                 // The title property stays: the same room, so the fields line up.
                                 Spacer(Modifier.size(48.dp))
                             }
+                        }
+                        val options = property.options
+                        if (options != null && property.id != null && property.id in opened) {
+                            OptionsEditor(
+                                property = property.name,
+                                options = options,
+                                isStatus = property.type == "status",
+                                enabled = enabled,
+                            ) { changed -> edited = edited.toMutableList().also { it[index] = property.copy(options = changed) } }
                         }
                     }
                     Box {
@@ -201,7 +254,7 @@ fun EditDatabaseScreen(
                             }
                         }
                     }
-                    // Options, formats, kinds and views: in Notion.
+                    // Formats, kinds and views: in Notion.
                     TextButton(onClick = onOpenInNotion) {
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -238,8 +291,13 @@ fun EditDatabaseScreen(
     if (confirming) {
         AlertDialog(
             onDismissRequest = { confirming = false },
-            title = { Text(stringResource(R.string.remove_properties_title)) },
-            text = { Text(stringResource(R.string.remove_properties_body, removed.joinToString(", "))) },
+            title = { Text(stringResource(if (removed.isEmpty()) R.string.remove_options_title else R.string.remove_properties_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (removed.isNotEmpty()) Text(stringResource(R.string.remove_properties_body, removed.joinToString(", ")))
+                    if (lostOptions.isNotEmpty()) Text(stringResource(R.string.remove_options_body, lostOptions.joinToString(", ")))
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirming = false

@@ -135,6 +135,26 @@ class PropertyCodecTest {
     }
 
     @Test
+    fun `reads a status schema's default option and the group of each option`() {
+        val schema = PropertyCodec.parseSchema(
+            obj(
+                """{"id":"db","title":[],"properties":{"Stage":{"id":"s","name":"Stage","type":"status","status":{
+                  "default_option":"Doing",
+                  "options":[{"id":"1","name":"Todo","color":"gray"},{"id":"2","name":"Doing","color":"blue"},{"id":"3","name":"Done","color":"green","group":"Complete"}],
+                  "groups":[{"id":"g1","name":"To-do","color":"gray","option_ids":["1"]},{"id":"g2","name":"In progress","color":"blue","option_ids":["2"]}]}},
+                  "Kind":{"id":"k","name":"Kind","type":"select","select":{"options":[{"id":"9","name":"A","color":"red"}]}}}}""",
+            ),
+        )
+        val stage = schema.property("Stage")!!
+        assertEquals("Doing", stage.defaultOption)
+        assertEquals(listOf("To-do", "In progress", "Complete"), stage.options.map { it.group })
+        assertNull(schema.property("Kind")!!.defaultOption)
+        assertNull(schema.property("Kind")!!.options.single().group)
+        val none = PropertyCodec.parseSchema(obj("""{"id":"db","title":[],"properties":{"S":{"id":"s","name":"S","type":"status","status":{"default_option":null,"options":[]}}}}"""))
+        assertNull(none.property("S")!!.defaultOption)
+    }
+
+    @Test
     fun `a data source's schema knows the database it is in`() {
         val source = PropertyCodec.parseSchema(
             obj("""{"object":"data_source","id":"ds","title":[],"parent":{"type":"database_id","database_id":"db"},"properties":{}}"""),

@@ -201,7 +201,7 @@
     <string name="action_rename">Cambiar nombre</string>
     <string name="edit_database">Editar base de datos</string>
     <string name="action_save">Guardar</string>
-    <string name="edit_database_properties">Propiedades. Los formatos y las vistas se ajustan en Notion.</string>
+    <string name="edit_database_properties">Propiedades y sus opciones. Los formatos y las vistas se ajustan en Notion.</string>
     <string name="remove_properties_title">¿Quitar propiedades?</string>
     <string name="remove_properties_body">%1$s y sus valores en cada página se eliminan en Notion.</string>
     <string name="remove_and_save">Quitar y guardar</string>
@@ -291,4 +291,26 @@
     <string name="view_settings">Ajustes de vistas</string>
     <string name="edit_views_in_notion">Editar vistas en Notion</string>
     <string name="more_in_notion">Más opciones en Notion</string>
+    <string name="options_of">Opciones de %1$s</string>
+    <string name="option_add">Añadir opción</string>
+    <string name="option_name">Nombre de la opción</string>
+    <string name="option_remove">Quitar la opción %1$s</string>
+    <string name="option_color">Color de %1$s</string>
+    <string name="option_group">Grupo</string>
+    <string name="option_group_todo">Por hacer</string>
+    <string name="option_group_progress">En curso</string>
+    <string name="option_group_complete">Completado</string>
+    <string name="option_rename_hint">Para renombrar una opción, usa Notion.</string>
+    <string name="remove_options_title">¿Quitar opciones?</string>
+    <string name="remove_options_body">%1$s se eliminan en Notion. Las notas que las tienen pierden ese valor.</string>
+    <string name="notion_color_default">Predeterminado</string>
+    <string name="notion_color_gray">Gris</string>
+    <string name="notion_color_brown">Marrón</string>
+    <string name="notion_color_orange">Naranja</string>
+    <string name="notion_color_yellow">Amarillo</string>
+    <string name="notion_color_green">Verde</string>
+    <string name="notion_color_blue">Azul</string>
+    <string name="notion_color_purple">Morado</string>
+    <string name="notion_color_pink">Rosa</string>
+    <string name="notion_color_red">Rojo</string>
 </resources>

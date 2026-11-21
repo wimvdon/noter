@@ -27,6 +27,7 @@ import be.wimvandonck.noter.logic.EditedProperty
 import be.wimvandonck.noter.logic.PropertyKind
 import be.wimvandonck.noter.logic.SchemaEdits
 import be.wimvandonck.noter.logic.PropertyLayouts
+import be.wimvandonck.noter.logic.StatusDefaults
 import be.wimvandonck.noter.logic.QuickActions
 import be.wimvandonck.noter.logic.NotionViews
 import be.wimvandonck.noter.logic.DatabaseSetups
@@ -151,6 +152,7 @@ class DatabaseViewModel(
                 listOfNotNull(viewShown).associateBy { id },
                 listOfNotNull(db?.schema).associateBy { id },
             ),
+            statusDefaults = mapOf(id to StatusDefaults.of(db?.schema)),
             pendingCount = pending,
             offline = offline,
             sourceMissing = id.replace("-", "") in missing,

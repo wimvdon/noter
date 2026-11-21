@@ -20,6 +20,7 @@ import be.wimvandonck.noter.data.model.PageTemplate
 import be.wimvandonck.noter.logic.TemplatePick
 import be.wimvandonck.noter.data.model.PinnedDatabase
 import be.wimvandonck.noter.data.model.PropertyLayout
+import be.wimvandonck.noter.data.model.SelectOption
 import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.data.store.AppSettings
 import be.wimvandonck.noter.logic.DatabaseSetups
@@ -30,6 +31,7 @@ import be.wimvandonck.noter.logic.HiddenOnHome
 import be.wimvandonck.noter.logic.PageTree
 import be.wimvandonck.noter.logic.NotionViews
 import be.wimvandonck.noter.logic.PropertyLayouts
+import be.wimvandonck.noter.logic.StatusDefaults
 import be.wimvandonck.noter.logic.SearchKind
 import be.wimvandonck.noter.logic.SearchResults
 import be.wimvandonck.noter.logic.SharedContent
@@ -68,6 +70,8 @@ data class NotesUiState(
     val cardProperty: String? = null,
     /** How each database shows its properties, with what its cards show (see PropertyLayouts.cardLayouts). */
     val propertyLayouts: Map<String, PropertyLayout> = emptyMap(),
+    /** The default option of each status property (by property name) of each database (by data source ID), shown for notes without a status. */
+    val statusDefaults: Map<String, Map<String, SelectOption>> = emptyMap(),
     /** True while nothing is cached yet and the first download runs. */
     val loading: Boolean = false,
     val refreshing: Boolean = false,
@@ -255,6 +259,7 @@ class MainViewModel(
                     NotionViews.shownViews(viewCaches.mapValues { it.value.views }, settings.views),
                     databases.mapNotNull { (id, db) -> db.schema?.let { id to it } }.toMap(),
                 ),
+                statusDefaults = databases.mapValues { StatusDefaults.of(it.value.schema) }.filterValues { it.isNotEmpty() },
                 refreshing = pull || databases.values.any { it.refreshing },
                 pendingCount = pending,
                 offline = offline,
