@@ -103,13 +103,27 @@ object BlockCodec {
         return url to file.stringOrNull("expiry_time")
     }
 
-    /** The cells of a table's rows (Notion's "table_row" children), as plain text. */
-    fun tableRows(children: List<JsonObject>): List<List<String>> =
+    /** One row of a table: its block ID ("" if Notion sent none, the row can then not be edited) and its cells as inline Markdown (see [Block.rows]). */
+    data class TableRow(val id: String, val cells: List<String>)
+
+    /** The rows of a table (Notion's "table_row" children) with their IDs. */
+    fun tableRows(children: List<JsonObject>): List<TableRow> =
         children.filter { it.stringOrNull("type") == "table_row" }.map { row ->
-            row.objOrNull("table_row")?.arrayOrNull("cells").orEmpty().map { cell ->
-                (cell as? JsonArray)?.let { InlineMarkdown.plainText(it) }.orEmpty()
-            }
+            TableRow(
+                row.stringOrNull("id").orEmpty(),
+                row.objOrNull("table_row")?.arrayOrNull("cells").orEmpty().map { cell ->
+                    (cell as? JsonArray)?.let { InlineMarkdown.fromRichText(it) }.orEmpty()
+                },
+            )
         }
+
+    /**
+     * The body for updating a table row: every cell of the row (Notion replaces the whole array),
+     * each as rich text made from its Markdown, so mentions and formatting in cells that weren't
+     * edited are sent back as they were.
+     */
+    fun tableRowRequest(cells: List<String>): Map<String, Any?> =
+        mapOf("table_row" to mapOf("cells" to cells.map { InlineMarkdown.toRichText(it) }))
 
     /** The body for creating [block] (append children / create page). */
     fun toCreateRequest(block: Block): Map<String, Any?> {

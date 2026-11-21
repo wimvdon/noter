@@ -279,9 +279,16 @@ ViewModels (ui/*/…ViewModel) ── StateFlow<UiState> ── Composables
 
 - **Blocks** (`data/notion/BlockCodec.kt`): paragraphs, headings 1 to 4 (also toggle headings), bulleted,
   numbered and to-do lists, toggles, quotes, callouts, code and dividers are editable. Other blocks
-  are shown read-only and left untouched (`ui/note/ReadOnlyBlocks.kt`): images, tables (their rows
-  cost one more request per table), equations, files, videos, PDFs, audio, bookmarks, embeds,
+  are shown read-only and left untouched (`ui/note/ReadOnlyBlocks.kt`): images, equations, files, videos, PDFs, audio, bookmarks, embeds,
   linked pages and the table of contents; tapping one opens it in the browser or in Notion.
+  Tables (their rows cost one more request per table) are shown as a grid; the text of a cell can
+  be edited: tapping it opens a dialog (`CellDialog`), Save sets the cell in the note's cached
+  content at once (`NotesRepository.setTableRow`) and queues `PendingOp.SetTableRow`, which sends
+  the whole row to `PATCH /v1/blocks/{row_id}` (`BlockCodec.tableRowRequest`). Cells are inline
+  Markdown with `InlineTokens` like text lines, so mentions and colours of the other cells survive.
+  `Block.rowIds` holds the row IDs (a copy from before has none: `logic/TableCells.kt` calls it not
+  editable, and opening the note downloads it again). Edits not sent yet are put back on content
+  downloaded meanwhile. Rows and columns are not added or removed in the app.
   Anything else is an outlined box with its kind, "Can't be shown or edited here" and an "Open in
   Notion" button that opens the page at that block.
 - **Nested blocks** (inside a toggle, a list item, a quote, …): downloaded with the note (one

@@ -69,6 +69,8 @@
     <string name="block_linked_page">Verknüpfte Seite</string>
     <string name="block_equation">Formel</string>
     <string name="block_table_of_contents">Inhalt</string>
+    <string name="table_edit_cell">Zelle bearbeiten</string>
+    <string name="table_edit_hint">Zeilen und Spalten fügst du in Notion hinzu.</string>
     <string name="type_text">Text</string>
     <string name="type_h1">Überschrift 1</string>
     <string name="type_h2">Überschrift 2</string>

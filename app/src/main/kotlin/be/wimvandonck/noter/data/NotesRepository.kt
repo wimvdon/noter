@@ -40,6 +40,7 @@ import be.wimvandonck.noter.logic.MoveDestination
 import be.wimvandonck.noter.logic.MoveTargets
 import be.wimvandonck.noter.logic.SharedNotes
 import be.wimvandonck.noter.logic.SubpageTitles
+import be.wimvandonck.noter.logic.TableCells
 import be.wimvandonck.noter.logic.WebArticles
 import kotlinx.serialization.json.JsonObject
 import be.wimvandonck.noter.data.notion.PropertyCodec
@@ -812,6 +813,23 @@ class NotesRepository(
     }
 
     /**
+     * Sets the cells of table row [rowId] on the page: the cached content shows them at once and
+     * the change is queued for Notion like any edit (it waits while offline). [cells] is every
+     * cell of the row, as inline Markdown.
+     */
+    suspend fun setTableRow(pageId: String, rowId: String, cells: List<String>) = withContext(Dispatchers.IO) {
+        val id = resolve(pageId)
+        lock.withLock {
+            if (id in trashed || id.startsWith(NoteSummary.LOCAL_PREFIX)) return@withLock
+            cache.content(id)?.let { content ->
+                cache.saveContent(content.copy(blocks = TableCells.withRow(content.blocks, rowId, cells)))
+            }
+            enqueue(PendingOp.SetTableRow(id, rowId, cells))
+        }
+        scheduleFlush()
+    }
+
+    /**
      * The sync button of a note: sends what is waiting, then gets the note's latest version from
      * Notion. Returns the content when nothing on this phone is waiting to be sent.
      */
@@ -835,13 +853,17 @@ class NotesRepository(
             }
             val edited = page.stringOrNull("last_edited_time")
             val cached = cache.content(id)
-            val current = cached != null && cached.remoteEditedTime == edited && cached.nestedLoaded && !cached.hasExpiredFiles(clock())
+            // Tables from before their cells could be edited are downloaded again, for the row IDs.
+            val current = cached != null && cached.remoteEditedTime == edited && cached.nestedLoaded && !cached.hasExpiredFiles(clock()) &&
+                !TableCells.needsRowIds(cached.blocks)
             if (cached != null && current && !cached.dirty) return@withContext withSubpageTitles(id, cached)
             if (cached?.dirty == true) return@withContext null
-            val fresh = downloadContent(id, cached?.blocks.orEmpty(), edited)
+            val downloaded = downloadContent(id, cached?.blocks.orEmpty(), edited)
             lock.withLock {
                 val now = cache.content(id)
                 if (now?.dirty == true) return@withLock null
+                // Table cells edited here and not sent yet stay as they are.
+                val fresh = downloaded.copy(blocks = TableCells.applyPending(downloaded.blocks, _outbox.value))
                 cache.saveContent(fresh)
                 updatePreview(id, fresh)
                 fresh
@@ -901,7 +923,10 @@ class NotesRepository(
             val block = if (parentType == Columns.TABS) BlockCodec.asTab(parsed) else parsed
             when {
                 // A table's cells are its rows (nested blocks): one more request per table.
-                block.rawType == "table" && block.hasChildren -> result += block.copy(rows = BlockCodec.tableRows(client.blockChildren(notionId)))
+                block.rawType == "table" && block.hasChildren -> {
+                    val rows = BlockCodec.tableRows(client.blockChildren(notionId))
+                    result += block.copy(rows = rows.map { it.cells }, rowIds = rows.map { it.id })
+                }
                 // Text blocks and columns show what is in them; images, synced blocks, … keep theirs in Notion.
                 nested && block.hasChildren && (block.type != BlockType.UNSUPPORTED || Columns.isContainer(block)) && depth < MAX_DEPTH -> {
                     result += block.copy(hasChildren = false)
@@ -1051,6 +1076,11 @@ class NotesRepository(
         }
         is PendingOp.RestorePage -> {
             client.restorePage(op.pageId)
+            true
+        }
+        is PendingOp.SetTableRow -> {
+            // A row that is gone from Notion answers "not found": flush then drops the change.
+            client.updateBlock(op.rowId, BlockCodec.tableRowRequest(op.cells))
             true
         }
     }

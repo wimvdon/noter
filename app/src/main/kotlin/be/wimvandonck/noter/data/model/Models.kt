@@ -569,8 +569,14 @@ data class Block(
     val urlExpiry: String? = null,
     /** A link to a page ([url]) that is a database, not a page. */
     val linksDatabase: Boolean = false,
-    /** A table's cells, row by row, as plain text. */
+    /**
+     * A table's cells, row by row, in the same inline Markdown as a text line ([text]), with
+     * mentions and colours kept (see InlineTokens). Copies from before tables could be edited
+     * have them as plain text and no [rowIds].
+     */
     val rows: List<List<String>>? = null,
+    /** The Notion ID of each row in [rows] (null in copies from before cells could be edited). */
+    val rowIds: List<String>? = null,
     /** The table's first row is its header. */
     val headerRow: Boolean = false,
     /**

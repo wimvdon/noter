@@ -66,6 +66,11 @@ sealed interface PendingOp {
         val customEmojiId: String? = null,
         val customEmojiUrl: String? = null,
     ) : PendingOp
+
+    /** A table row of the page gets these [cells] (every cell of the row, as inline Markdown). */
+    @Serializable
+    @SerialName("table_row")
+    data class SetTableRow(override val pageId: String, val rowId: String, val cells: List<String>) : PendingOp
 }
 
 /**
@@ -100,6 +105,10 @@ object Outbox {
                     val existing = queue.indexOfFirst { it is PendingOp.SetIcon && it.pageId == op.pageId }
                     if (existing >= 0) queue.toMutableList().apply { set(existing, op) } else queue + op
                 }
+            is PendingOp.SetTableRow -> {
+                val existing = queue.indexOfFirst { it is PendingOp.SetTableRow && it.rowId == op.rowId }
+                if (existing >= 0) queue.toMutableList().apply { set(existing, op) } else queue + op
+            }
             is PendingOp.TrashPage ->
                 if (local) {
                     queue.filterNot { it.pageId == op.pageId }
@@ -131,6 +140,7 @@ object Outbox {
                     is PendingOp.TrashPage -> op.copy(pageId = newId)
                     is PendingOp.RestorePage -> op.copy(pageId = newId)
                     is PendingOp.SetIcon -> op.copy(pageId = newId)
+                    is PendingOp.SetTableRow -> op.copy(pageId = newId)
                 }
             }
         }

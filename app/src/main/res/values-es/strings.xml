@@ -69,6 +69,8 @@
     <string name="block_linked_page">Página enlazada</string>
     <string name="block_equation">Ecuación</string>
     <string name="block_table_of_contents">Índice</string>
+    <string name="table_edit_cell">Editar celda</string>
+    <string name="table_edit_hint">Las filas y columnas se añaden en Notion.</string>
     <string name="type_text">Texto</string>
     <string name="type_h1">Encabezado 1</string>
     <string name="type_h2">Encabezado 2</string>

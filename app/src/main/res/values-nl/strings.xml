@@ -69,6 +69,8 @@
     <string name="block_linked_page">Gekoppelde pagina</string>
     <string name="block_equation">Vergelijking</string>
     <string name="block_table_of_contents">Inhoud</string>
+    <string name="table_edit_cell">Cel bewerken</string>
+    <string name="table_edit_hint">Rijen en kolommen voeg je toe in Notion.</string>
     <string name="type_text">Tekst</string>
     <string name="type_h1">Kop 1</string>
     <string name="type_h2">Kop 2</string>

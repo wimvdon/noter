@@ -2,6 +2,20 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Table cells can be edited
+
+Tapping a cell of a table opens a small dialog with its text; Save sends the row to Notion
+(`PATCH /v1/blocks/{row_id}` with `table_row.cells`, always every cell of the row, because Notion
+replaces the whole array). Cells are kept as the same inline Markdown as a text line, so formatting,
+colours and mentions in the cells that weren't edited are sent back as they were. The change goes
+through the offline queue (`PendingOp.SetTableRow`, a newer edit of a row replaces the older one) and
+shows at once, also after a refresh before it is sent. A table's rows are kept with their Notion IDs
+(`Block.rowIds`); a copy from before that has plain-text cells and no IDs, so such a table stays
+read-only until the note is downloaded again, which happens the next time it is opened. Rows and
+columns can't be added or removed here (the dialog says so): that stays in Notion. Rejected: editing
+in place in the grid (tiny tap targets and the keyboard covering the table on a phone) and sending
+the edit at once without the queue (it would be lost offline).
+
 ## 2026-11-21: The icon picker offers the workspace's custom emojis
 
 Notion lists a workspace's custom emojis (`GET /custom_emojis`: `id`, `name`, `url`) and takes one as
