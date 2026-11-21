@@ -2,6 +2,29 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Edit database makes every property kind the API allows
+
+The owner wants Noter to do what Notion's API can, with no "do this in Notion" dead ends.
+`PATCH /data_sources` (and `POST /databases`) now make formulas (`expression`), relations
+(`data_source_id`, one-way or `dual_property` so the other database shows it too), rollups (by
+relation and property ID, with a function), unique IDs (optional prefix), places, statuses (Notion's
+default options; adding one to an existing database is now allowed) and numbers with a format.
+Existing properties can change type (the new type's settings under their ID; not to or from the
+title or a place, and Save warns that values may be lost) and an existing number its format. The
+database's description, `is_locked` (Notion's app only) and `is_inline` are edited too, behind an
+"Advanced" row for the switches. All of it is plain Kotlin (`PropertyConfigs`, `SchemaEdits`,
+`DatabaseEdit`) with unit tests and fake-server tests of the exact JSON. Each kind's settings are a
+short form under the property's name, made of drop-down fields so it fits a small phone. A relation
+lists Home's databases in the same workspace (Notion's search when Home's list isn't loaded); a
+rollup loads the related data source's properties when needed and offers only calculations that
+suit the property's type. New database offers everything but a rollup, which needs a saved
+relation. Number formats: seven common ones (Notion has about 45; an existing other one is kept and
+shown by its key). Still in Notion, because the API can't: renaming existing options, status
+groups, buttons and verifications. The edited properties are now kept across rotation as JSON
+(kotlinx.serialization, already a dependency) instead of hand-split strings. Rejected: all 45 number
+formats with translated names (a long list for formats rarely used) and a separate screen per
+property (more taps than a form in place).
+
 ## 2026-11-21: Board and calendar views as sections
 
 A board, calendar or timeline view used to show its notes as one list. The view's `configuration`
@@ -694,7 +717,7 @@ Without a `LICENSE` file the legal default is already all rights reserved, but t
 
 ## 2026-11-21: More to choose when making a database
 
-Notion's API now makes a status property, starting options for selects, and Tasks and Projects databases (`database_type`). New database offers Empty, Tasks or Projects at the top; Tasks and Projects hide the property list because Notion builds it. Select and multi-select get an Options field (comma-separated). Status is added with Notion's three default options: custom status options need groups that the app can't show in a small dialog, so they stay in Notion. Inside a page a switch can show the database in the page (`is_inline`). Edit database still doesn't offer status, because adding one there isn't checked. Rejected: a full option editor with colours.
+Notion's API now makes a status property, starting options for selects, and Tasks and Projects databases (`database_type`). New database offers Empty, Tasks or Projects at the top; Tasks and Projects hide the property list because Notion builds it. Select and multi-select get an Options field (comma-separated). Status is added with Notion's three default options: custom status options need groups that the app can't show in a small dialog, so they stay in Notion. Inside a page a switch can show the database in the page (`is_inline`). Edit database still doesn't offer status, because adding one there isn't checked (it does since the later entry "Edit database makes every property kind the API allows"). Rejected: a full option editor with colours.
 
 ## 2026-11-21: Light view management on the database screen
 

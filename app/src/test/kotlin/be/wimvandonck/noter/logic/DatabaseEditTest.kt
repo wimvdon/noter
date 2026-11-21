@@ -7,6 +7,8 @@ import be.wimvandonck.noter.data.model.PinnedDatabase
 import be.wimvandonck.noter.data.model.WorkspaceItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DatabaseEditTest {
@@ -59,5 +61,44 @@ class DatabaseEditTest {
             DatabaseEdit.icon("📚").applyToPins(pins, setOf("src1")),
         )
         assertEquals(DatabaseInfo("d", "New", star), DatabaseEdit.rename("New").applyTo(DatabaseInfo("d", "Old", star)))
+    }
+
+    private val inPage = DatabaseInfo("d", "Books", parentId = "p", description = "Old", locked = false, inline = false)
+
+    private fun of(info: DatabaseInfo?, description: String = "Old", locked: Boolean = false, inline: Boolean = false, title: String = "Books") =
+        DatabaseEdit.of("Books", title, null, null, false, info, description, locked, inline)
+
+    @Test
+    fun `nothing changed is an empty edit`() {
+        assertTrue(of(inPage).isEmpty)
+    }
+
+    @Test
+    fun `description, lock and inline go to the database, only name and icon to its data source`() {
+        val edit = of(inPage, description = " New text ", locked = true, inline = true, title = "Reading")
+        assertEquals(
+            mapOf(
+                "title" to listOf(mapOf("type" to "text", "text" to mapOf("content" to "Reading"))),
+                "description" to listOf(mapOf("type" to "text", "text" to mapOf("content" to "New text"))),
+                "is_locked" to true,
+                "is_inline" to true,
+            ),
+            edit.body(),
+        )
+        assertEquals(setOf("title"), edit.sourceBody().keys)
+        assertEquals(DatabaseInfo("d", "Reading", parentId = "p", description = "New text", locked = true, inline = true), edit.applyTo(inPage))
+    }
+
+    @Test
+    fun `an emptied description is sent as no text, a long one in pieces`() {
+        assertEquals(emptyList<Any>(), of(inPage, description = "").body()["description"])
+        assertEquals(listOf(2000, 500), DatabaseEdit.richText("a".repeat(2500)).map { ((it["text"] as Map<*, *>)["content"] as String).length })
+    }
+
+    @Test
+    fun `inline only for a database in a page, and nothing but the name when the database isn't known`() {
+        assertNull(of(inPage.copy(parentId = null), inline = true).inline)
+        val unknown = of(null, description = "x", locked = true, inline = true)
+        assertTrue(unknown.isEmpty)
     }
 }

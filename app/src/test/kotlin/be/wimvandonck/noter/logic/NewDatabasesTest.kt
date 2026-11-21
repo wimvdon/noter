@@ -96,4 +96,36 @@ class NewDatabasesTest {
         assertEquals(false, NewDatabases.request("B", null, "Name", emptyList(), inline = true).containsKey("is_inline"))
         assertEquals(true, NewDatabases.request("", "p", "Name", emptyList(), starter = DatabaseStarter.TASKS, inline = true)["is_inline"])
     }
+
+    @Test
+    fun `a formula, relation, unique ID, place and number format go in the new database's schema`() {
+        val properties = listOf(
+            NewProperty(PropertyKind.FORMULA, "Double", settings = PropertySettings(formula = "prop(\"Price\") * 2")),
+            NewProperty(PropertyKind.RELATION, "Author", settings = PropertySettings(relationTarget = "ds-authors")),
+            NewProperty(PropertyKind.UNIQUE_ID, "ID", settings = PropertySettings(idPrefix = "BK")),
+            NewProperty(PropertyKind.PLACE, "Where"),
+            NewProperty(PropertyKind.NUMBER, "Price", settings = PropertySettings(numberFormat = "euro")),
+        )
+        val schema = schema(NewDatabases.request("Books", null, "Name", properties))
+        assertEquals(mapOf("formula" to mapOf("expression" to "prop(\"Price\") * 2")), schema["Double"])
+        assertEquals(
+            mapOf("relation" to mapOf("data_source_id" to "ds-authors", "type" to "single_property", "single_property" to emptyMap<String, Any?>())),
+            schema["Author"],
+        )
+        assertEquals(mapOf("unique_id" to mapOf("prefix" to "BK")), schema["ID"])
+        assertEquals(mapOf("place" to emptyMap<String, Any?>()), schema["Where"])
+        assertEquals(mapOf("number" to mapOf("format" to "euro")), schema["Price"])
+    }
+
+    @Test
+    fun `Create waits for every property's settings, and a new database offers no rollup`() {
+        val formula = NewProperty(PropertyKind.FORMULA, "F")
+        assertEquals(false, NewDatabases.canCreate("Books", listOf(formula), DatabaseStarter.EMPTY))
+        assertEquals(true, NewDatabases.canCreate("Books", listOf(formula.copy(settings = PropertySettings(formula = "1"))), DatabaseStarter.EMPTY))
+        assertEquals(false, NewDatabases.canCreate(" ", emptyList(), DatabaseStarter.EMPTY))
+        assertEquals(true, NewDatabases.canCreate("", listOf(formula), DatabaseStarter.TASKS))
+        assertEquals(false, PropertyKind.ROLLUP in NewDatabases.addableKinds(emptyList()))
+        assertEquals(true, PropertyKind.STATUS in NewDatabases.addableKinds(emptyList()))
+        assertEquals(false, PropertyKind.UNIQUE_ID in NewDatabases.addableKinds(listOf(NewProperty(PropertyKind.UNIQUE_ID, "ID"))))
+    }
 }

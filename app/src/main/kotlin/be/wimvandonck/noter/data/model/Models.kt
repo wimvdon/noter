@@ -343,6 +343,12 @@ data class DatabaseInfo(
     val sources: List<PageRef> = emptyList(),
     /** The page (or block on a page) the database is in (null: at the top of the workspace, or not known). */
     val parentId: String? = null,
+    /** Its description, as plain text. */
+    val description: String = "",
+    /** Locked in Notion: its views and properties can't be changed in Notion's own app. */
+    val locked: Boolean = false,
+    /** Shown inside its page rather than as a page of its own. */
+    val inline: Boolean = false,
 )
 
 /** A linked page of a relation property, or a page of the related database. */

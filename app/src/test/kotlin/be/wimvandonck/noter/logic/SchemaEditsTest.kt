@@ -3,6 +3,8 @@ package be.wimvandonck.noter.logic
 import be.wimvandonck.noter.data.model.CardLayout
 import be.wimvandonck.noter.data.model.DatabaseSetup
 import be.wimvandonck.noter.data.model.NoteSort
+import be.wimvandonck.noter.data.model.PageRef
+import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.data.model.PropertyLayout
 import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.SelectOption
@@ -222,5 +224,113 @@ class SchemaEditsTest {
         val change = SchemaEdits.change(withOptions, edited)
         assertEquals(setOf("name", "select"), (change.properties["p1"] as Map<*, *>).keys)
         assertEquals(mapOf("Priority" to "Urgency"), change.renamed)
+    }
+
+    // ---- Kinds with settings, Change type, number formats ----
+
+    private val price = PropertySchema("n1", "Price", "number", numberFormat = "euro")
+    private val link = PropertySchema("r1", "Books", "relation", relationDatabaseId = "ds-books")
+    private val schema = listOf(title, price, link, tags)
+
+    private fun added(kind: PropertyKind, name: String, settings: PropertySettings) =
+        SchemaEdits.start(schema) + EditedProperty(null, name, kind.type, kind, settings = settings)
+
+    @Test
+    fun `a new formula, relation, rollup, unique ID, place and status are sent with their settings`() {
+        fun sent(kind: PropertyKind, settings: PropertySettings = PropertySettings()) =
+            SchemaEdits.change(schema, added(kind, "New", settings)).properties["New"]
+        assertEquals(mapOf("formula" to mapOf("expression" to "prop(\"Price\") * 2")), sent(PropertyKind.FORMULA, PropertySettings(formula = "prop(\"Price\") * 2")))
+        assertEquals(
+            mapOf("relation" to mapOf("data_source_id" to "ds-9", "type" to "dual_property", "dual_property" to emptyMap<String, Any?>())),
+            sent(PropertyKind.RELATION, PropertySettings(relationTarget = "ds-9", twoWay = true)),
+        )
+        assertEquals(
+            mapOf("rollup" to mapOf("relation_property_id" to "r1", "rollup_property_id" to "x", "function" to "count")),
+            sent(PropertyKind.ROLLUP, PropertySettings(rollupRelation = "r1", rollupProperty = "x", rollupFunction = "count")),
+        )
+        assertEquals(mapOf("unique_id" to mapOf("prefix" to "BK")), sent(PropertyKind.UNIQUE_ID, PropertySettings(idPrefix = "BK")))
+        assertEquals(mapOf("place" to emptyMap<String, Any?>()), sent(PropertyKind.PLACE))
+        assertEquals(mapOf("status" to emptyMap<String, Any?>()), sent(PropertyKind.STATUS))
+        assertEquals(mapOf("number" to mapOf("format" to "percent")), sent(PropertyKind.NUMBER, PropertySettings(numberFormat = "percent")))
+    }
+
+    @Test
+    fun `a property without its settings is not ready to save`() {
+        assertEquals(listOf("New"), SchemaEdits.incomplete(added(PropertyKind.FORMULA, "New", PropertySettings())))
+        assertTrue(SchemaEdits.incomplete(added(PropertyKind.FORMULA, "New", PropertySettings(formula = "1"))).isEmpty())
+    }
+
+    @Test
+    fun `a new type is sent under the property's ID, with a rename in the same entry`() {
+        val edited = SchemaEdits.start(schema).map { if (it.id == "a1") SchemaEdits.changeType(it, PropertyKind.SELECT).copy(name = "Genre") else it }
+        val change = SchemaEdits.change(schema, edited)
+        assertEquals(mapOf("a1" to mapOf("name" to "Genre", "select" to emptyMap<String, Any?>())), change.properties)
+        assertEquals(listOf("Tags"), SchemaEdits.changedTypes(schema, edited))
+        // Its options are not asked about separately.
+        assertTrue(SchemaEdits.removedOptions(schema, edited).isEmpty())
+    }
+
+    @Test
+    fun `changing back to its own type sends nothing`() {
+        val changed = SchemaEdits.changeType(SchemaEdits.start(schema).first { it.id == "a1" }, PropertyKind.TEXT)
+        val back = SchemaEdits.changeType(changed, PropertyKind.MULTI_SELECT)
+        assertNull(back.changedTo)
+        assertTrue(SchemaEdits.change(schema, SchemaEdits.start(schema).map { if (it.id == "a1") back else it }).isEmpty)
+    }
+
+    @Test
+    fun `a type change to a formula sends its expression`() {
+        val edited = SchemaEdits.start(schema).map {
+            if (it.id == "n1") SchemaEdits.changeType(it, PropertyKind.FORMULA).copy(settings = PropertySettings(formula = "1 + 1")) else it
+        }
+        assertEquals(mapOf("n1" to mapOf("formula" to mapOf("expression" to "1 + 1"))), SchemaEdits.change(schema, edited).properties)
+    }
+
+    @Test
+    fun `an existing number keeps its format until another is chosen`() {
+        val start = SchemaEdits.start(schema)
+        assertEquals("euro", start.first { it.id == "n1" }.settings.numberFormat)
+        assertTrue(SchemaEdits.change(schema, start).isEmpty)
+        val edited = start.map { if (it.id == "n1") it.copy(settings = it.settings.copy(numberFormat = "dollar")) else it }
+        assertEquals(mapOf("n1" to mapOf("number" to mapOf("format" to "dollar"))), SchemaEdits.change(schema, edited).properties)
+    }
+
+    @Test
+    fun `the title can't change type, a rollup needs a saved relation, one unique ID at most`() {
+        val start = SchemaEdits.start(schema)
+        assertTrue(SchemaEdits.typeChanges(start.first { it.type == "title" }, schema, start).isEmpty())
+        assertTrue(PropertyKind.ROLLUP in SchemaEdits.addableKinds(schema, start))
+        // The relation itself can't become a rollup of itself.
+        assertFalse(PropertyKind.ROLLUP in SchemaEdits.typeChanges(start.first { it.id == "r1" }, schema, start))
+        val withoutRelation = start.filter { it.id != "r1" }
+        assertFalse(PropertyKind.ROLLUP in SchemaEdits.addableKinds(schema, withoutRelation))
+        val withId = SchemaEdits.add(start, PropertyKind.UNIQUE_ID, "ID")
+        assertFalse(PropertyKind.UNIQUE_ID in SchemaEdits.addableKinds(schema, withId))
+        assertEquals(listOf("r1"), SchemaEdits.rollupRelations(schema, start).map { it.id })
+    }
+
+    @Test
+    fun `relation targets are Home's databases in the same workspace, one per data source`() {
+        val items = listOf(
+            WorkspaceItem("ds-1", isDatabase = true, title = "Books", databaseId = "db-1"),
+            WorkspaceItem("db-2", isDatabase = true, title = "Health", sources = listOf(PageRef("s-a", "Skin"), PageRef("s-b", "Food"))),
+            WorkspaceItem("page", isDatabase = false, title = "Page"),
+            WorkspaceItem("ds-3", isDatabase = true, title = "Work"),
+        )
+        val owners = mapOf("ds1" to "home", "sa" to "home", "sb" to "home", "ds3" to "work")
+        assertEquals(
+            listOf(PageRef("ds-1", "Books"), PageRef("s-a", "Health · Skin"), PageRef("s-b", "Health · Food")),
+            SchemaEdits.relationTargets(items, owners, "home"),
+        )
+        assertEquals(4, SchemaEdits.relationTargets(items, owners, null).size)
+    }
+
+    @Test
+    fun `edited properties survive a rotation as JSON`() {
+        val edited = added(PropertyKind.RELATION, "New", PropertySettings(relationTarget = "ds", twoWay = true)) +
+            SchemaEdits.changeType(SchemaEdits.start(schema).first { it.id == "a1" }, PropertyKind.SELECT)
+        val serializer = kotlinx.serialization.builtins.ListSerializer(EditedProperty.serializer())
+        val json = kotlinx.serialization.json.Json.encodeToString(serializer, edited)
+        assertEquals(edited, kotlinx.serialization.json.Json.decodeFromString(serializer, json))
     }
 }

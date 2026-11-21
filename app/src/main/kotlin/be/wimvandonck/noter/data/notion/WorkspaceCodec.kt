@@ -1,6 +1,7 @@
 package be.wimvandonck.noter.data.notion
 
 import be.wimvandonck.noter.data.api.arrayOrNull
+import be.wimvandonck.noter.data.api.boolOrNull
 import be.wimvandonck.noter.data.api.objOrNull
 import be.wimvandonck.noter.data.api.stringOrNull
 import be.wimvandonck.noter.data.model.DatabaseInfo
@@ -89,6 +90,9 @@ object WorkspaceCodec {
             IconCodec.parse(database.objOrNull("icon")),
             dataSources(database),
             parentPage(database),
+            description = InlineMarkdown.plainText(database.arrayOrNull("description")).trim(),
+            locked = database.boolOrNull("is_locked") == true,
+            inline = database.boolOrNull("is_inline") == true,
         )
     }
 

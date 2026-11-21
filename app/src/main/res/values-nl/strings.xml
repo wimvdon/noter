@@ -203,7 +203,7 @@
     <string name="new_database_in_page">Nieuwe database in deze pagina</string>
     <string name="new_database_at_top">Nieuwe database bovenaan</string>
     <string name="new_database_name">Naam van de database</string>
-    <string name="new_database_properties">Zijn eigenschappen naast de naam. Notaties en weergaven stel je in Notion in.</string>
+    <string name="new_database_properties">Zijn eigenschappen naast de naam.</string>
     <string name="new_database_tags">Tags</string>
     <string name="new_database_title_property">Naam</string>
     <string name="new_database_create">Maken</string>
@@ -211,7 +211,7 @@
     <string name="action_rename">Naam wijzigen</string>
     <string name="edit_database">Database bewerken</string>
     <string name="action_save">Opslaan</string>
-    <string name="edit_database_properties">Eigenschappen en hun opties. Notaties en weergaven stel je in Notion in.</string>
+    <string name="edit_database_properties">Eigenschappen</string>
     <string name="remove_properties_title">Eigenschappen verwijderen?</string>
     <string name="remove_properties_body">%1$s en hun waarden op elke pagina worden in Notion verwijderd.</string>
     <string name="remove_and_save">Verwijderen en opslaan</string>
@@ -240,7 +240,7 @@
     <string name="property_kind_other">Overig</string>
     <string name="new_database_add_property">Eigenschap toevoegen</string>
     <string name="new_database_remove_property">%1$s verwijderen</string>
-    <string name="new_database_created">Database gemaakt. Open hem in Notion om zijn weergaven te bewerken.</string>
+    <string name="new_database_created">Database gemaakt</string>
     <string name="new_database_starter_empty">Leeg</string>
     <string name="new_database_starter_tasks">Taken</string>
     <string name="new_database_starter_projects">Projecten</string>
@@ -299,7 +299,6 @@
     </plurals>
     <string name="view_settings">Weergave-instellingen</string>
     <string name="edit_views_in_notion">Weergaven bewerken in Notion</string>
-    <string name="more_in_notion">Meer opties in Notion</string>
     <!-- Managing a database's Notion views -->
     <string name="view_options">Weergaveopties</string>
     <string name="new_view">Nieuwe weergave</string>
@@ -382,4 +381,42 @@
     <string name="notion_color_purple">Paars</string>
     <string name="notion_color_pink">Roze</string>
     <string name="notion_color_red">Rood</string>
+    <string name="property_kind_place">Plaats</string>
+    <string name="number_format">Getalnotatie</string>
+    <string name="number_format_number">Getal</string>
+    <string name="number_format_number_with_commas">Getal met scheidingstekens</string>
+    <string name="number_format_percent">Procent</string>
+    <string name="number_format_euro">Euro</string>
+    <string name="number_format_dollar">Dollar</string>
+    <string name="number_format_pound">Pond</string>
+    <string name="number_format_yen">Yen</string>
+    <string name="relation_database">Database</string>
+    <string name="relation_two_way">Ook in de andere database tonen</string>
+    <string name="relation_no_databases">Geen databases gevonden</string>
+    <string name="rollup_property">Eigenschap</string>
+    <string name="rollup_function">Berekenen</string>
+    <string name="rollup_loading">Eigenschappen laden…</string>
+    <string name="rollup_fn_show_original">Origineel tonen</string>
+    <string name="rollup_fn_count">Alles tellen</string>
+    <string name="rollup_fn_count_values">Waarden tellen</string>
+    <string name="rollup_fn_unique">Unieke waarden tellen</string>
+    <string name="rollup_fn_empty">Lege tellen</string>
+    <string name="rollup_fn_not_empty">Niet-lege tellen</string>
+    <string name="rollup_fn_sum">Som</string>
+    <string name="rollup_fn_average">Gemiddelde</string>
+    <string name="rollup_fn_min">Min</string>
+    <string name="rollup_fn_max">Max</string>
+    <string name="rollup_fn_earliest_date">Vroegste datum</string>
+    <string name="rollup_fn_latest_date">Laatste datum</string>
+    <string name="rollup_fn_checked">Aangevinkt</string>
+    <string name="rollup_fn_percent_checked">Procent aangevinkt</string>
+    <string name="unique_id_prefix">Voorvoegsel (optioneel)</string>
+    <string name="required_field">Verplicht</string>
+    <string name="property_menu">Meer voor %1$s</string>
+    <string name="change_type">Type wijzigen</string>
+    <string name="change_types_title">Types wijzigen?</string>
+    <string name="change_types_body">%1$s krijgen een ander type. Waarden die niet passen kunnen verloren gaan.</string>
+    <string name="database_description">Beschrijving</string>
+    <string name="database_locked">Vergrendeld in Notion</string>
+    <string name="database_locked_hint">Alleen de app van Notion is vergrendeld; Noter kan hem nog wijzigen.</string>
 </resources>

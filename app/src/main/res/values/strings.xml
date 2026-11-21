@@ -203,7 +203,7 @@
     <string name="new_database_in_page">New database in this page</string>
     <string name="new_database_at_top">New database at the top</string>
     <string name="new_database_name">Database name</string>
-    <string name="new_database_properties">Its properties besides the name. Formats and views are set in Notion.</string>
+    <string name="new_database_properties">Its properties besides the name.</string>
     <string name="new_database_tags">Tags</string>
     <string name="new_database_title_property">Name</string>
     <string name="new_database_create">Create</string>
@@ -211,7 +211,7 @@
     <string name="action_rename">Rename</string>
     <string name="edit_database">Edit database</string>
     <string name="action_save">Save</string>
-    <string name="edit_database_properties">Properties and their options. Formats and views are set in Notion.</string>
+    <string name="edit_database_properties">Properties</string>
     <string name="remove_properties_title">Remove properties?</string>
     <string name="remove_properties_body">%1$s and their values on every page are deleted in Notion.</string>
     <string name="remove_and_save">Remove and save</string>
@@ -240,7 +240,7 @@
     <string name="property_kind_other">Other</string>
     <string name="new_database_add_property">Add property</string>
     <string name="new_database_remove_property">Remove %1$s</string>
-    <string name="new_database_created">Database created. Open it in Notion to edit its views.</string>
+    <string name="new_database_created">Database created</string>
     <string name="new_database_starter_empty">Empty</string>
     <string name="new_database_starter_tasks">Tasks</string>
     <string name="new_database_starter_projects">Projects</string>
@@ -299,7 +299,6 @@
     </plurals>
     <string name="view_settings">View settings</string>
     <string name="edit_views_in_notion">Edit views in Notion</string>
-    <string name="more_in_notion">More options in Notion</string>
     <!-- Managing a database's Notion views -->
     <string name="view_options">View options</string>
     <string name="new_view">New view</string>
@@ -382,4 +381,45 @@
     <string name="notion_color_purple">Purple</string>
     <string name="notion_color_pink">Pink</string>
     <string name="notion_color_red">Red</string>
+    <!-- Edit database: property settings -->
+    <string name="formula_hint" translatable="false">prop(\"Name\") * 2</string>
+    <string name="unique_id_prefix_hint" translatable="false">TASK</string>
+    <string name="property_kind_place">Place</string>
+    <string name="number_format">Number format</string>
+    <string name="number_format_number">Number</string>
+    <string name="number_format_number_with_commas">Number with commas</string>
+    <string name="number_format_percent">Percent</string>
+    <string name="number_format_euro">Euro</string>
+    <string name="number_format_dollar">Dollar</string>
+    <string name="number_format_pound">Pound</string>
+    <string name="number_format_yen">Yen</string>
+    <string name="relation_database">Database</string>
+    <string name="relation_two_way">Show on the other database too</string>
+    <string name="relation_no_databases">No databases found</string>
+    <string name="rollup_property">Property</string>
+    <string name="rollup_function">Calculate</string>
+    <string name="rollup_loading">Loading properties…</string>
+    <string name="rollup_fn_show_original">Show original</string>
+    <string name="rollup_fn_count">Count all</string>
+    <string name="rollup_fn_count_values">Count values</string>
+    <string name="rollup_fn_unique">Count unique values</string>
+    <string name="rollup_fn_empty">Count empty</string>
+    <string name="rollup_fn_not_empty">Count not empty</string>
+    <string name="rollup_fn_sum">Sum</string>
+    <string name="rollup_fn_average">Average</string>
+    <string name="rollup_fn_min">Min</string>
+    <string name="rollup_fn_max">Max</string>
+    <string name="rollup_fn_earliest_date">Earliest date</string>
+    <string name="rollup_fn_latest_date">Latest date</string>
+    <string name="rollup_fn_checked">Checked</string>
+    <string name="rollup_fn_percent_checked">Percent checked</string>
+    <string name="unique_id_prefix">Prefix (optional)</string>
+    <string name="required_field">Required</string>
+    <string name="property_menu">More for %1$s</string>
+    <string name="change_type">Change type</string>
+    <string name="change_types_title">Change types?</string>
+    <string name="change_types_body">%1$s get another type. Values that don’t fit it may be lost.</string>
+    <string name="database_description">Description</string>
+    <string name="database_locked">Locked in Notion</string>
+    <string name="database_locked_hint">Only Notion’s own app is locked; Noter can still change it.</string>
 </resources>

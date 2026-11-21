@@ -1,10 +1,14 @@
 package be.wimvandonck.noter.logic
 
+import kotlinx.serialization.Serializable
+
 /**
- * A kind of property a new database can have (#71): the ones Notion's API makes with nothing more
- * to fill in (a status gets Notion's Not started, In progress and Done). Not formulas, relations
- * and rollups (they need more than a name), nor buttons and IDs.
+ * A kind of property Noter can make (#71), in a new database or with Edit database: every kind
+ * Notion's API makes (a status gets Notion's Not started, In progress and Done). A formula,
+ * relation and rollup need [PropertySettings] too. Not buttons and verifications (the API can't
+ * make them).
  */
+@Serializable
 enum class PropertyKind(val type: String) {
     TEXT("rich_text"),
     NUMBER("number"),
@@ -22,6 +26,17 @@ enum class PropertyKind(val type: String) {
     CREATED_BY("created_by"),
     LAST_EDITED_TIME("last_edited_time"),
     LAST_EDITED_BY("last_edited_by"),
+    FORMULA("formula"),
+    RELATION("relation"),
+    ROLLUP("rollup"),
+    UNIQUE_ID("unique_id"),
+    PLACE("place"),
+    ;
+
+    companion object {
+        /** The kind of Notion [type] (null: one Noter can't make, such as the title). */
+        fun of(type: String): PropertyKind? = entries.firstOrNull { it.type == type }
+    }
 }
 
 /** What a new database is made from: nothing (its own properties), or one of Notion's starters. */
@@ -32,22 +47,43 @@ enum class DatabaseStarter(val type: String?) {
 }
 
 /**
- * A property of a new database: its kind, name and, for a select or multi-select, the starting
- * options as the user typed them, separated by commas ([NewDatabases.parseOptions]).
+ * A property of a new database: its kind, name, for a select or multi-select the starting
+ * options as the user typed them, separated by commas ([NewDatabases.parseOptions]), and what
+ * some kinds need besides ([settings]: a formula, a relation's database, a number's format, …).
  */
-data class NewProperty(val kind: PropertyKind, val name: String, val options: String = "") {
+@Serializable
+data class NewProperty(
+    val kind: PropertyKind,
+    val name: String,
+    val options: String = "",
+    val settings: PropertySettings = PropertySettings(),
+) {
     /** Whether [options] can be typed for this kind (a status keeps Notion's own). */
     val takesOptions: Boolean get() = kind == PropertyKind.SELECT || kind == PropertyKind.MULTI_SELECT
+
+    /** Whether Notion has everything it needs to make it. */
+    val isComplete: Boolean get() = PropertyConfigs.isComplete(kind, settings)
 }
 
 /**
  * A new database as Notion's `POST /databases` wants it (#71): a title, its title property and the
  * properties chosen, inside a page or at the top of the workspace. Notion makes the first data
- * source and a table view with it; anything else is changed in Notion.
+ * source and a table view with it; Edit database changes it afterwards.
  */
 object NewDatabases {
     /** What a new database has besides its title property, as in Notion: Tags. */
     val DEFAULT_KINDS = listOf(PropertyKind.MULTI_SELECT)
+
+    /**
+     * The kinds a new database's Add property offers: all but a rollup (it needs a relation that
+     * is already there; Edit database adds one afterwards), and one unique ID at most.
+     */
+    fun addableKinds(properties: List<NewProperty>): List<PropertyKind> =
+        PropertyConfigs.addable(hasRelation = false, hasUniqueId = properties.any { it.kind == PropertyKind.UNIQUE_ID })
+
+    /** Whether Create can be tapped: with a starter always, else with a name and every property complete. */
+    fun canCreate(title: String, properties: List<NewProperty>, starter: DatabaseStarter): Boolean =
+        starter != DatabaseStarter.EMPTY || (title.isNotBlank() && properties.all { it.isComplete })
 
     /**
      * [properties] with a property of [kind] added at the end, named [defaultName] as Notion names
@@ -75,9 +111,10 @@ object NewDatabases {
      * The request for database [title] inside page [parentPageId] (null: at the top of the
      * workspace). With [starter] Tasks or Projects Notion builds the properties (`database_type`,
      * which can't go with a schema), and a blank [title] leaves it to Notion to name it after the
-     * type. Otherwise it has title property [titleName] and [properties] in their order: a blank
-     * name becomes [fallbackNames]' name for its kind; names are made unique as in [add]. [inline]
-     * shows it inside the page rather than as a page of its own (only inside a page).
+     * type. Otherwise it has title property [titleName] and [properties] in their order, each with
+     * its settings ([PropertyConfigs.config]): a blank name becomes [fallbackNames]' name for its
+     * kind; names are made unique as in [add]. [inline] shows it inside the page rather than as a
+     * page of its own (only inside a page).
      */
     fun request(
         title: String,
@@ -104,17 +141,9 @@ object NewDatabases {
         properties.forEach { property ->
             val wanted = property.name.trim().ifBlank { fallbackNames[property.kind].orEmpty().ifBlank { property.kind.type } }
             val options = if (property.takesOptions) parseOptions(property.options) else emptyList()
-            schema[uniqueName(wanted, schema.keys.toList())] = mapOf(property.kind.type to config(property.kind, options))
+            schema[uniqueName(wanted, schema.keys.toList())] = mapOf(property.kind.type to PropertyConfigs.config(property.kind, property.settings, options))
         }
         request["initial_data_source"] = mapOf("properties" to schema)
         return request
-    }
-
-    /** What Notion needs to know about a new property of [kind]: nothing, but a number's format and the [options] of a select. */
-    fun config(kind: PropertyKind, options: List<String> = emptyList()): Map<String, Any?> = when {
-        kind == PropertyKind.NUMBER -> mapOf("format" to "number")
-        options.isNotEmpty() && (kind == PropertyKind.SELECT || kind == PropertyKind.MULTI_SELECT) ->
-            mapOf("options" to options.map { mapOf("name" to it) })
-        else -> emptyMap()
     }
 }
