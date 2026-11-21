@@ -159,8 +159,13 @@ properties and content: the pages of databases and pages on their own.
   `page:<id>`) are still read, so a change or new subpage waiting to be sent isn't lost; they
   aren't refreshed.
 - **Note** (`ui/note/`): header image, icon (tap it, or "Add icon", to choose an emoji in
-  `PageIconSheet.kt`: common ones, any other typed with the keyboard (`logic/EmojiInput.kt`), or
-  none; sent as `PendingOp.SetIcon`, or with the create for a new note), title, properties (`PropertyEditors.kt`; the
+  `PageIconSheet.kt`: the workspace's custom emojis first when it has any (a "Workspace" section of
+  images; `GET /custom_emojis` through `NotionClient.listCustomEmojis`, `NotesRepository.customEmojis`,
+  asked with the token of the page's workspace and kept a day per workspace in `emojis_<workspace>.json`),
+  then common ones, any other typed with the keyboard (`logic/EmojiInput.kt`), or none; sent as
+  `PendingOp.SetIcon` (an emoji, or a custom emoji's ID with its image for showing it at once; ops
+  queued before this only have the emoji and still read), or with the create for a new note. Edit
+  database uses the same sheet), title, properties (`PropertyEditors.kt`; the
   picker of a select or multi-select can add an option: type a name, tap Add, and Notion makes the
   option when the note is saved, `logic/NewOptions.kt`; an option any cached note has is added to
   the database's properties at once, `logic/SchemaOptions.kt`, and opening a note downloads its
@@ -369,7 +374,7 @@ ViewModels (ui/*/…ViewModel) ── StateFlow<UiState> ── Composables
 |---|---|---|
 | Each database's setup (cards, quick actions), the Notion view it shows, its view tabs' order and hidden ones, pinned databases (key, name, icon), pinned notes and pages, databases and pages hidden from Home (ID, name, icon), order, property layouts, theme | DataStore `backed_up_settings` | Yes |
 | Tokens, their kind, refresh tokens (Connect to Notion), a sign-in's one-time key | `EncryptedSharedPreferences` `notion_key_encrypted_prefs` | No |
-| Copies of notes, schemas, users, Home's list of databases and pages; unsent changes | JSON files in `noBackupFilesDir/notion_cache` | No |
+| Copies of notes, schemas, users, custom emojis, Home's list of databases and pages; unsent changes | JSON files in `noBackupFilesDir/notion_cache` | No |
 | Images | Coil's cache in `cacheDir/images` | No |
 
 ## Structure

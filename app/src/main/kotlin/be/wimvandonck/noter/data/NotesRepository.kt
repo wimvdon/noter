@@ -7,6 +7,8 @@ import be.wimvandonck.noter.data.api.objOrNull
 import be.wimvandonck.noter.data.api.stringOrNull
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
+import be.wimvandonck.noter.data.model.CustomEmoji
+import be.wimvandonck.noter.data.model.CustomEmojisCache
 import be.wimvandonck.noter.data.model.DatabaseInfo
 import be.wimvandonck.noter.data.model.withoutHidden
 import be.wimvandonck.noter.data.model.DatabaseSchema
@@ -25,6 +27,7 @@ import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.model.TrashedPage
 import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.data.notion.BlockCodec
+import be.wimvandonck.noter.data.notion.IconCodec
 import be.wimvandonck.noter.data.notion.InlineMarkdown
 import be.wimvandonck.noter.data.web.WebPageClient
 import be.wimvandonck.noter.logic.SharedContent
@@ -687,17 +690,20 @@ class NotesRepository(
         scheduleFlush()
     }
 
-    /** Sets the page's icon to [emoji] (removes it when null) here, and queues it for Notion. */
-    suspend fun setIcon(pageId: String, emoji: String?) = withContext(Dispatchers.IO) {
+    /**
+     * Sets the page's icon to [emoji] or the workspace's [custom] emoji (removes it when both are
+     * null) here, and queues it for Notion.
+     */
+    suspend fun setIcon(pageId: String, emoji: String?, custom: CustomEmoji? = null) = withContext(Dispatchers.IO) {
         val id = resolve(pageId)
         lock.withLock {
             if (id in trashed) return@withLock
             val databaseId = findNote(_databases.value, id)?.databaseId ?: return@withLock
             val now = Instant.ofEpochMilli(clock()).toString()
-            val icon = emoji?.let { PageIcon(emoji = it) }
+            val icon = IconCodec.choice(emoji, custom?.id, custom?.url)
             setState(databaseId) { db -> db.copy(notes = db.notes.map { if (it.id == id) it.copy(icon = icon, lastEditedTime = now) else it }) }
             _databases.value[databaseId]?.let { saveDatabaseCache(databaseId, it) }
-            enqueue(PendingOp.SetIcon(id, emoji))
+            enqueue(PendingOp.SetIcon(id, emoji, custom?.id, custom?.url))
         }
         scheduleFlush()
     }
@@ -1034,7 +1040,7 @@ class NotesRepository(
         }
         is PendingOp.SaveContent -> sendContent(op.pageId)
         is PendingOp.SetIcon -> {
-            val page = client.updatePageIcon(op.pageId, op.emoji)
+            val page = client.updatePageIcon(op.pageId, op.emoji, op.customEmojiId)
             val databaseId = findNote(_databases.value, op.pageId)?.databaseId
             if (databaseId != null) PropertyCodec.parsePage(page, databaseId)?.let { replaceNote(databaseId, it) }
             true
@@ -1053,6 +1059,7 @@ class NotesRepository(
         val note = findNote(_databases.value, op.pageId) ?: return true
         val sent = note.properties
         val sentEmoji = note.icon?.emoji
+        val sentCustom = note.icon?.customEmojiId
         val source = if (op.databaseId == PAGES || isPageNotebook(op.databaseId)) null else resolveSource(op.databaseId)
         // Sent before without an answer (offline, a timeout, a server error): Notion may have made
         // it anyway. Look for it first, so the note isn't made twice.
@@ -1071,11 +1078,11 @@ class NotesRepository(
             val (children, using) = attempt
             try {
                 made = if (source == null) {
-                    client.createPageIn(op.parentPageId, PropertyCodec.toCreateRequest(sent), sentEmoji, op.workspace, children)
+                    client.createPageIn(op.parentPageId, PropertyCodec.toCreateRequest(sent), sentEmoji, op.workspace, children, sentCustom)
                 } else {
                     val properties = if (using != null) NoteTemplates.createProperties(sent) else sent
                     client.createPage(
-                        source, PropertyCodec.toCreateRequest(properties), children = children, emoji = sentEmoji,
+                        source, PropertyCodec.toCreateRequest(properties), children = children, emoji = sentEmoji, customEmojiId = sentCustom,
                         template = using?.let(NoteTemplates::request),
                     )
                 }
@@ -1110,9 +1117,12 @@ class NotesRepository(
                     _outbox.value = Outbox.add(_outbox.value, PendingOp.SetProperty(newId, prop))
                 }
             }
-            if (current.icon?.emoji != sentEmoji) {
+            if (current.icon?.emoji != sentEmoji || current.icon?.customEmojiId != sentCustom) {
                 merged = merged.copy(icon = current.icon)
-                _outbox.value = Outbox.add(_outbox.value, PendingOp.SetIcon(newId, current.icon?.emoji))
+                _outbox.value = Outbox.add(
+                    _outbox.value,
+                    PendingOp.SetIcon(newId, current.icon?.emoji, current.icon?.customEmojiId, current.icon?.url.takeIf { current.icon?.customEmojiId != null }),
+                )
             }
             setState(op.databaseId) { db -> db.copy(notes = db.notes.map { if (it.id == oldId) merged else it }) }
             _databases.value[op.databaseId]?.let { saveDatabaseCache(op.databaseId, it) }
@@ -1444,6 +1454,25 @@ class NotesRepository(
         } catch (e: NotionException) {
             val owner = if (e.isTemporary) null else runCatching { TokenCodec.parse(client.me()).owner }.getOrNull()
             KnownUsers.of(_databases.value.values.flatMap { it.notes }, owner, cached?.users.orEmpty())
+        }
+    }
+
+    /**
+     * The custom emojis of the workspace that [objectId] (a page, database or data source) is in,
+     * to choose as its icon (cached for a day per workspace). Empty when there are none or Notion
+     * can't say (a personal access token may not list them), then what was kept before.
+     */
+    suspend fun customEmojis(objectId: String?): List<CustomEmoji> = withContext(Dispatchers.IO) {
+        val workspace = objectId?.let { owners.value[plain(it).lowercase()] }
+        val name = workspace ?: "main"
+        val cached = cache.customEmojis(name)
+        if (cached != null && fresh(cached.fetchedMs, LOOKUP_TTL_MS)) return@withContext cached.emojis
+        try {
+            val emojis = client.listCustomEmojis(workspace).mapNotNull { IconCodec.parseCustomEmoji(it) }.sortedBy { it.name.lowercase() }
+            cache.saveCustomEmojis(name, CustomEmojisCache(emojis, clock()))
+            emojis
+        } catch (e: NotionException) {
+            cached?.emojis.orEmpty()
         }
     }
 

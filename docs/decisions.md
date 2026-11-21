@@ -2,6 +2,17 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: The icon picker offers the workspace's custom emojis
+
+Notion lists a workspace's custom emojis (`GET /custom_emojis`: `id`, `name`, `url`) and takes one as
+a page or database icon with only its ID (`{"type":"custom_emoji","custom_emoji":{"id":...}}`; the ID
+must belong to the page's workspace). The icon sheet now has a "Workspace" section with their images
+(only when there are any), asked with the token of the page's workspace and kept for a day per
+workspace. `PendingOp.SetIcon` gained optional `customEmojiId` and `customEmojiUrl` fields, so
+queued changes from older versions still read. Rejected: searching them by name (a long list of
+images is easier to scan than a typed name) and one merged list over all workspaces (Notion refuses
+an emoji from another workspace).
+
 ## 2026-11-21: Undo after the trash, and a Trash list in Settings
 
 Moving a note to the trash is one tap away from a mistake, so after it the screen the note closed

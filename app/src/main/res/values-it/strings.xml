@@ -79,6 +79,8 @@
     <string name="change_icon">Cambia icona</string>
     <string name="remove_icon">Rimuovi</string>
     <string name="page_icon_type">Digita o incolla un’emoji</string>
+    <string name="workspace_emojis">Spazio di lavoro</string>
+    <string name="common_emojis">Emoji</string>
     <string name="type_bulleted">Elenco puntato</string>
     <string name="type_numbered">Elenco numerato</string>
     <string name="type_checkbox">Elenco di cose da fare</string>

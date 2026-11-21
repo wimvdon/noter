@@ -79,6 +79,8 @@
     <string name="change_icon">Symbol ändern</string>
     <string name="remove_icon">Entfernen</string>
     <string name="page_icon_type">Emoji eingeben oder einfügen</string>
+    <string name="workspace_emojis">Workspace</string>
+    <string name="common_emojis">Emojis</string>
     <string name="type_bulleted">Aufzählung</string>
     <string name="type_numbered">Nummerierte Liste</string>
     <string name="type_checkbox">To-do-Liste</string>

@@ -190,6 +190,7 @@ fun NoteScreen(
 ) {
     val viewModel: NoteViewModel = viewModel(key = "note-$pageId", factory = NoteViewModel.factory(pageId))
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val customEmojis by viewModel.customEmojis.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
     var focusedKey by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
@@ -323,7 +324,10 @@ fun NoteScreen(
     if (choosingIcon && note != null) {
         PageIconSheet(
             hasIcon = note.icon != null,
+            customEmojis = customEmojis,
+            onShown = viewModel::loadCustomEmojis,
             onPick = { emoji -> choosingIcon = false; viewModel.setIcon(emoji) },
+            onPickCustom = { custom -> choosingIcon = false; viewModel.setIcon(null, custom) },
             onRemove = { choosingIcon = false; viewModel.setIcon(null) },
             onDismiss = { choosingIcon = false },
         )

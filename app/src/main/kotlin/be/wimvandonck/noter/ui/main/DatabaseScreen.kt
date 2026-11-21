@@ -104,6 +104,7 @@ fun DatabaseScreen(
     var quickActionsOpen by remember { mutableStateOf(false) }
     var choosingTemplate by remember { mutableStateOf(false) }
     val editing by viewModel.editing.collectAsStateWithLifecycle()
+    val customEmojis by viewModel.customEmojis.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // On top: a change that reached Notion meanwhile asks the view's notes again.
     LifecycleResumeEffect(viewModel) {
@@ -330,6 +331,8 @@ fun DatabaseScreen(
             state = edit,
             title = state.title,
             icon = state.icon,
+            customEmojis = customEmojis,
+            onShowIcons = viewModel::loadCustomEmojis,
             onSave = viewModel::saveEdit,
             onOpenInNotion = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, state.notionUrl.toUri())) } },
             onDismiss = viewModel::dismissEdit,

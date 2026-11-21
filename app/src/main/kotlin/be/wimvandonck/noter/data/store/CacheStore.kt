@@ -1,5 +1,6 @@
 package be.wimvandonck.noter.data.store
 
+import be.wimvandonck.noter.data.model.CustomEmojisCache
 import be.wimvandonck.noter.data.model.DatabaseInfo
 import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.data.model.DatabaseSchema
@@ -124,6 +125,15 @@ class CacheStore(private val dir: File) {
 
     @Synchronized
     fun saveUsers(cache: UsersCache) = write(USERS, UsersCache.serializer(), cache)
+
+    /** The custom emojis of [workspace] ([Workspaces.id]; "main" when it isn't known). */
+    @Synchronized
+    fun customEmojis(workspace: String): CustomEmojisCache? =
+        read("emojis_${safe(workspace)}.json", CustomEmojisCache.serializer())
+
+    @Synchronized
+    fun saveCustomEmojis(workspace: String, cache: CustomEmojisCache) =
+        write("emojis_${safe(workspace)}.json", CustomEmojisCache.serializer(), cache)
 
     @Synchronized
     fun pages(databaseId: String): PagesCache? = read("pages_${safe(databaseId)}.json", PagesCache.serializer())

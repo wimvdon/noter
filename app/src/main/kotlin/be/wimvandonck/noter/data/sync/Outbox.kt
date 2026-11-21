@@ -3,7 +3,7 @@ package be.wimvandonck.noter.data.sync
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.NoteSummary
-import be.wimvandonck.noter.data.model.PageIcon
+import be.wimvandonck.noter.data.notion.IconCodec
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -53,10 +53,19 @@ sealed interface PendingOp {
     @SerialName("restore")
     data class RestorePage(override val pageId: String) : PendingOp
 
-    /** The page's icon becomes [emoji], or is removed when it is null. */
+    /**
+     * The page's icon becomes [emoji], or a custom emoji ([customEmojiId], shown from [customEmojiUrl]
+     * until Notion answers), or is removed when all are null. Ops queued before custom emojis
+     * existed only have [emoji] and still read.
+     */
     @Serializable
     @SerialName("icon")
-    data class SetIcon(override val pageId: String, val emoji: String?) : PendingOp
+    data class SetIcon(
+        override val pageId: String,
+        val emoji: String?,
+        val customEmojiId: String? = null,
+        val customEmojiUrl: String? = null,
+    ) : PendingOp
 }
 
 /**
@@ -133,7 +142,7 @@ object Outbox {
         return pending.fold(note) { acc, op ->
             when (op) {
                 is PendingOp.SetProperty -> acc.withProperty(op.property)
-                is PendingOp.SetIcon -> acc.copy(icon = op.emoji?.let { PageIcon(emoji = it) })
+                is PendingOp.SetIcon -> acc.copy(icon = IconCodec.choice(op.emoji, op.customEmojiId, op.customEmojiUrl))
                 else -> acc
             }
         }
