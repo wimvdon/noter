@@ -3,6 +3,8 @@ package be.wimvandonck.noter.data
 import be.wimvandonck.noter.data.api.NotionClient
 import be.wimvandonck.noter.data.api.NotionErrors
 import be.wimvandonck.noter.data.api.NotionException
+import be.wimvandonck.noter.data.api.arrayOrNull
+import be.wimvandonck.noter.data.api.asObjectOrNull
 import be.wimvandonck.noter.data.api.objOrNull
 import be.wimvandonck.noter.data.api.stringOrNull
 import be.wimvandonck.noter.data.model.Block
@@ -82,6 +84,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import be.wimvandonck.noter.logic.FileUploads
+import be.wimvandonck.noter.logic.PickedFile
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -128,6 +132,23 @@ sealed interface RepoEvent {
 
     data object KeyRejected : RepoEvent
 }
+
+/** Why a photo or file couldn't be added to a note. */
+enum class UploadProblem {
+    /** Bigger than Notion takes ([UploadException.limitBytes]). */
+    TOO_LARGE,
+
+    /** No connection: files aren't kept to send later. */
+    OFFLINE,
+
+    /** The note (or the line the file goes after) isn't in Notion yet. */
+    NOT_SAVED,
+
+    /** Notion refused it ([UploadException.detail], see NotionErrors). */
+    FAILED,
+}
+
+class UploadException(val problem: UploadProblem, val limitBytes: Long = 0, val detail: String = "") : Exception(detail.ifEmpty { problem.name })
 
 /**
  * A note just moved to the trash on this phone, kept in memory so Undo ([NotesRepository.undoTrash])
@@ -1403,6 +1424,124 @@ class NotesRepository(
             // Blocks added in Notion by someone else stay out of the comparison, so they are kept.
             val base = remote.blocks.filter { it.notionId in known || it.notionId in ids }
             now.copy(blocks = blocks, base = base, uncertain = false).also { cache.saveContent(it) }
+        }
+    }
+
+    // ---- Photos and files -----------------------------------------------------------------
+    // Sent at once, never queued: Notion drops an upload that isn't attached within an hour, and
+    // keeping photos on the phone to send later isn't worth it. Without a connection the user
+    // hears so and can try again.
+
+    private fun NotionException.asUpload(): UploadException {
+        if (isOffline) _offline.value = true
+        return UploadException(if (isOffline) UploadProblem.OFFLINE else UploadProblem.FAILED, detail = NotionErrors.of(this))
+    }
+
+    /**
+     * Sends [file] to Notion for note [pageId] and returns the upload's ID (to attach with
+     * [insertFileBlock], [changeFiles] or [setCover]). What waits to be sent goes first, so a
+     * note made on this phone exists in Notion. Fails with an [UploadException].
+     */
+    suspend fun uploadFile(pageId: String, file: PickedFile): String = withContext(Dispatchers.IO) {
+        if (!hasKey()) throw UploadException(UploadProblem.FAILED)
+        flush()
+        val id = resolve(pageId)
+        if (id.startsWith(NoteSummary.LOCAL_PREFIX)) throw UploadException(if (_offline.value) UploadProblem.OFFLINE else UploadProblem.NOT_SAVED)
+        try {
+            val limit = client.uploadLimit(id)
+            if (!FileUploads.fits(file.size, limit)) throw UploadException(UploadProblem.TOO_LARGE, limitBytes = limit)
+            client.uploadFile(id, file)
+        } catch (e: NotionException) {
+            throw e.asUpload()
+        }
+    }
+
+    /**
+     * Adds a block of Notion's kind [type] ("image" or "file") showing upload [uploadId] to note
+     * [pageId], after the line [afterKey] (with what is nested in it; at the end when null), here
+     * and in Notion. The editor's edits are sent first, so that line is in Notion. Returns the new
+     * block as the editor shows it; null when Notion's answer didn't tell which block is new (the
+     * content was downloaded again: the editor shows the kept copy).
+     */
+    suspend fun insertFileBlock(pageId: String, afterKey: String?, uploadId: String, type: String): Block? =
+        withContext(NonCancellable + Dispatchers.IO) {
+            flush()
+            val id = resolve(pageId)
+            val content = cache.content(id) ?: PageContent(id, blocks = emptyList(), base = emptyList())
+            val target = FileUploads.target(content.blocks, afterKey) ?: throw UploadException(
+                if (_offline.value) UploadProblem.OFFLINE else UploadProblem.NOT_SAVED,
+            )
+            val known = content.base.mapNotNull { it.notionId }.toSet()
+            val json = try {
+                client.appendBlock(target.parentId ?: id, BlockCodec.fileUploadRequest(type, uploadId), target.afterId, known)
+            } catch (e: NotionException) {
+                throw e.asUpload()
+            }
+            val block = json?.let { BlockCodec.parse(it, UUID.randomUUID().toString()) }
+            if (block == null) {
+                // Added, but which block it is isn't known: what Notion has now replaces the copy here.
+                val fresh = downloadContent(id, cache.content(id)?.blocks.orEmpty(), null)
+                lock.withLock {
+                    val now = cache.content(id)
+                    val blocks = BlockMatch.keepIds(now?.blocks.orEmpty(), fresh.blocks)
+                    val merged = if (now?.dirty == true) now.copy(base = fresh.blocks, blocks = blocks) else fresh
+                    cache.saveContent(merged.copy(dirty = ContentDiff.plan(merged.base, merged.blocks).isNotEmpty()))
+                    updatePreview(id, merged)
+                }
+                return@withContext null
+            }
+            lock.withLock {
+                val now = cache.content(id) ?: content
+                val blocks = FileUploads.insertAfter(now.blocks, afterKey, block)
+                val base = FileUploads.insertAfter(now.base, target.afterId, block, byNotionId = true)
+                val updated = now.copy(
+                    blocks = blocks,
+                    base = base,
+                    dirty = ContentDiff.plan(base, blocks).isNotEmpty(),
+                    // Notion's last edit is this one: download again next time the note opens.
+                    remoteEditedTime = null,
+                )
+                cache.saveContent(updated)
+                updatePreview(id, updated)
+                blocks.first { it.key == block.key }
+            }
+        }
+
+    /**
+     * Changes files property [property] of note [pageId] in Notion: removes the file at
+     * [removeAt] called [removeName] and adds [added] (name and upload ID of each). Notion is asked
+     * for the page first, because it replaces the whole list and only takes back the files it
+     * hosts as a recent answer had them (see PropertyCodec.filesRequest).
+     */
+    suspend fun changeFiles(
+        pageId: String,
+        property: String,
+        removeAt: Int? = null,
+        removeName: String? = null,
+        added: List<Pair<String, String>> = emptyList(),
+    ) = withContext(Dispatchers.IO) {
+        val id = resolve(pageId)
+        try {
+            val page = client.getPage(id)
+            val current = page.objOrNull("properties")?.objOrNull(property)?.arrayOrNull("files").orEmpty().mapNotNull { it.asObjectOrNull() }
+            val updated = client.updatePageProperties(id, mapOf(property to PropertyCodec.filesRequest(current, removeAt, removeName, added)))
+            val databaseId = findNote(_databases.value, id)?.databaseId ?: return@withContext
+            PropertyCodec.parsePage(updated, databaseId)?.let { replaceNote(databaseId, it) }
+        } catch (e: NotionException) {
+            throw e.asUpload()
+        }
+    }
+
+    /** Sets note [pageId]'s header image to upload [uploadId] in Notion, or removes it when that is null. */
+    suspend fun setCover(pageId: String, uploadId: String?) = withContext(Dispatchers.IO) {
+        val id = resolve(pageId)
+        if (id.startsWith(NoteSummary.LOCAL_PREFIX)) throw UploadException(UploadProblem.NOT_SAVED)
+        try {
+            val page = client.updatePageCover(id, uploadId)
+            val databaseId = findNote(_databases.value, id)?.databaseId ?: return@withContext
+            PropertyCodec.parsePage(page, databaseId)?.let { replaceNote(databaseId, it) }
+        } catch (e: NotionException) {
+            throw e.asUpload()
         }
     }
 

@@ -167,6 +167,15 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.HideImage
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material3.CircularProgressIndicator
+import be.wimvandonck.noter.logic.FileUploads
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SelectAll
@@ -251,6 +260,35 @@ fun NoteScreen(
                 is NoteViewModel.QuickActionResult.NothingToChange ->
                     snackbar.showSnackbar(resources.getString(R.string.quick_action_nothing, result.name))
             }
+        }
+    }
+    // Photos and files (Notion's File Upload API): the system's pickers hand over the one the
+    // user chose, so the app needs no permission to read photos or files.
+    var pickTarget by remember { mutableStateOf<UploadTarget?>(null) }
+    fun picked(uri: android.net.Uri?) {
+        val target = pickTarget
+        pickTarget = null
+        if (uri != null && target != null) viewModel.addFile(uri, target)
+    }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { picked(it) }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked(it) }
+    fun choose(target: UploadTarget, image: Boolean) {
+        pickTarget = target
+        if (image) {
+            pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        } else {
+            runCatching { pickFile.launch(arrayOf("*/*")) }
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.uploadNotices.collect { notice ->
+            snackbar.showSnackbar(
+                when (notice) {
+                    is NoteViewModel.UploadNotice.TooLarge -> tooLargeText(resources, notice.limitBytes)
+                    NoteViewModel.UploadNotice.Unreadable -> resources.getString(R.string.upload_unreadable)
+                    is NoteViewModel.UploadNotice.Failed -> uploadProblemText(resources, notice.problem, notice.detail)
+                },
+            )
         }
     }
     val context = LocalContext.current
@@ -533,6 +571,24 @@ fun NoteScreen(
                                     )
                                 }
                                 DropdownMenuItem(
+                                    text = { Text(stringResource(if (note.cover != null) R.string.change_cover else R.string.add_cover)) },
+                                    leadingIcon = { Icon(Icons.Rounded.Image, null) },
+                                    onClick = {
+                                        menu = false
+                                        choose(UploadTarget.Cover, image = true)
+                                    },
+                                )
+                                if (note.cover != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.remove_cover)) },
+                                        leadingIcon = { Icon(Icons.Rounded.HideImage, null) },
+                                        onClick = {
+                                            menu = false
+                                            viewModel.removeCover()
+                                        },
+                                    )
+                                }
+                                DropdownMenuItem(
                                     text = { Text(stringResource(R.string.action_trash)) },
                                     leadingIcon = { Icon(Icons.Rounded.Delete, null) },
                                     onClick = { menu = false; confirmTrash = true },
@@ -556,6 +612,8 @@ fun NoteScreen(
                         onIndent = { viewModel.indent(block.key) },
                         onOutdent = { viewModel.outdent(block.key) },
                         onAddDivider = { viewModel.insertAfter(block.key, BlockType.DIVIDER) },
+                        onAddImage = { choose(UploadTarget.Content(block.key, image = true), image = true) },
+                        onAddFile = { choose(UploadTarget.Content(block.key, image = false), image = false) },
                         onSelect = {
                             selected = setOf(block.key)
                             selecting = true
@@ -581,7 +639,18 @@ fun NoteScreen(
         val headings = remember(state.blocks) { state.blocks.filter { it.type.isHeading && it.text.isNotBlank() } }
         val styling = MarkdownStyling(MaterialTheme.colorScheme.outline, MaterialTheme.colorScheme.primary)
         val titleProperty = note.properties.firstOrNull { it.type == "title" }
-        val lookups = PropertyLookups(state.users, state.relatedPages, viewModel::loadUsers, viewModel::loadRelated)
+        val fileActions = FileActions(
+            onAdd = { name -> choose(UploadTarget.Property(name), image = false) },
+            onRemove = viewModel::removeFile,
+            uploading = state.uploads.mapNotNull { u -> (u.target as? UploadTarget.Property)?.let { it.name to u } }
+                .groupBy({ it.first }, { it.second }),
+        )
+        val lookups = PropertyLookups(state.users, state.relatedPages, viewModel::loadUsers, viewModel::loadRelated, fileActions)
+        // Photos and files on their way into the content, under the line they will follow (null: at the end).
+        val uploadsAfter = remember(state.blocks, state.uploads) {
+            state.uploads.mapNotNull { u -> (u.target as? UploadTarget.Content)?.let { FileUploads.shownAfter(state.blocks, it.afterKey) to u } }
+                .groupBy({ it.first }, { it.second })
+        }
 
         LazyColumn(
             state = listState,
@@ -603,6 +672,20 @@ fun NoteScreen(
                 }
             }
             item(key = "__icon") {
+                if (state.uploads.any { it.target == UploadTarget.Cover }) {
+                    Row(
+                        Modifier.padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            stringResource(R.string.uploading_cover),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 // The icon, as in Notion: tap it to change it; without one, a button to add one.
                 val icon = note.icon
                 if (icon != null) {
@@ -706,7 +789,8 @@ fun NoteScreen(
                     // Nested blocks are indented, as in Notion; columns are shown one below the other.
                     val isSelected = block.key in selected
                     // Lines slide into place, but a new line shows at once: the cursor is in it.
-                    Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+                    Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+                    Box {
                     Column(
                         Modifier
                             .then(if (selecting && isSelected) Modifier.background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f), AppShapes.Item) else Modifier)
@@ -749,6 +833,26 @@ fun NoteScreen(
                                 .toggleable(value = isSelected, role = Role.Checkbox) { selected = BlockSelection.toggle(selected, block.key) },
                         )
                     }
+                    }
+                    uploadsAfter[block.key]?.forEach { upload ->
+                        val anchor = (upload.target as? UploadTarget.Content)?.afterKey
+                        val depth = state.blocks.indexOfFirst { it.key == anchor }.let { i -> visualDepths.getOrNull(i) ?: 0 }
+                        UploadPlaceholder(
+                            upload,
+                            onRetry = { viewModel.retryUpload(upload.id) },
+                            onRemove = { viewModel.removeUpload(upload.id) },
+                            modifier = Modifier.padding(start = NEST_INDENT * depth),
+                        )
+                    }
+                    }
+                }
+                uploadsAfter[null]?.let { atEnd ->
+                    item(key = "__uploads") {
+                        Column {
+                            atEnd.forEach { upload ->
+                                UploadPlaceholder(upload, onRetry = { viewModel.retryUpload(upload.id) }, onRemove = { viewModel.removeUpload(upload.id) })
+                            }
+                        }
                     }
                 }
                 item(key = "__footer") {
@@ -1213,6 +1317,8 @@ private fun FormatToolbar(
     onIndent: () -> Unit,
     onOutdent: () -> Unit,
     onAddDivider: () -> Unit,
+    onAddImage: () -> Unit,
+    onAddFile: () -> Unit,
     onSelect: () -> Unit,
     onDelete: () -> Unit,
     onDone: () -> Unit,
@@ -1262,6 +1368,8 @@ private fun FormatToolbar(
                 Icon(Icons.AutoMirrored.Rounded.FormatIndentIncrease, contentDescription = stringResource(R.string.action_indent))
             }
             IconButton(onClick = onAddDivider) { Icon(Icons.Rounded.HorizontalRule, contentDescription = stringResource(R.string.insert_divider)) }
+            IconButton(onClick = onAddImage) { Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = stringResource(R.string.add_image)) }
+            IconButton(onClick = onAddFile) { Icon(Icons.Rounded.AttachFile, contentDescription = stringResource(R.string.add_file)) }
             IconButton(onClick = onSelect) { Icon(Icons.Rounded.SelectAll, contentDescription = stringResource(R.string.action_select_lines)) }
             IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.action_delete_line)) }
             IconButton(onClick = onDone) { Icon(Icons.Rounded.KeyboardHide, contentDescription = stringResource(R.string.action_hide_keyboard)) }

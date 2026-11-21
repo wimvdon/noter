@@ -1,5 +1,6 @@
 package be.wimvandonck.noter.data.notion
 
+import be.wimvandonck.noter.data.api.toJsonElement
 import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.NotionUser
 import be.wimvandonck.noter.data.model.PropertyValue
@@ -203,4 +204,43 @@ class PropertyCodecTest {
         assertTrue(be.wimvandonck.noter.logic.ReadOnlyBlocks.isHidden("button"))
         assertFalse(be.wimvandonck.noter.logic.ReadOnlyBlocks.isHidden("bookmark"))
     }
+
+    private val hosted = obj("""{"name":"scan.pdf","type":"file","file":{"url":"https://files.notion/scan.pdf?sig","expiry_time":"2026-11-21T11:00:00.000Z"}}""")
+    private val link = obj("""{"name":"site","type":"external","external":{"url":"https://example.com/a.png"}}""")
+
+    @Test
+    fun `adding a file sends the files there back as Notion had them, and the upload`() {
+        val request = PropertyCodec.filesRequest(listOf(hosted, link), added = listOf("photo.jpg" to "up-1"))
+        val json = request.toJsonString()
+        assertEquals(
+            """{"files":[${hosted},${link},{"name":"photo.jpg","type":"file_upload","file_upload":{"id":"up-1"}}]}""",
+            json,
+        )
+    }
+
+    @Test
+    fun `removing a file leaves out the one at its place with its name`() {
+        assertEquals("""{"files":[$link]}""", PropertyCodec.filesRequest(listOf(hosted, link), removeAt = 0, removeName = "scan.pdf").toJsonString())
+        // Changed in Notion meanwhile (another file is at that place now): the one with the name goes.
+        assertEquals("""{"files":[$hosted]}""", PropertyCodec.filesRequest(listOf(hosted, link), removeAt = 0, removeName = "site").toJsonString())
+        // Gone already: nothing else is removed.
+        assertEquals("""{"files":[$hosted,$link]}""", PropertyCodec.filesRequest(listOf(hosted, link), removeAt = 1, removeName = "other").toJsonString())
+    }
+
+    @Test
+    fun `long file names are cut to 100 characters, keeping the extension`() {
+        val name = "a".repeat(120) + ".jpg"
+        val cut = PropertyCodec.fileName(name)
+        assertEquals(100, cut.length)
+        assertTrue(cut.endsWith(".jpg"))
+        assertEquals("short.png", PropertyCodec.fileName("short.png"))
+    }
+
+    @Test
+    fun `a files property stays out of the queued edits`() {
+        val files = NoteProperty("Files", "files", PropertyValue.Files(emptyList()))
+        assertNull(PropertyCodec.toRequest(files))
+    }
+
+    private fun Map<String, Any?>.toJsonString() = toJsonElement().toString()
 }

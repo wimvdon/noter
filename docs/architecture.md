@@ -171,7 +171,7 @@ properties and content: the pages of databases and pages on their own.
   the database's properties at once, `logic/SchemaOptions.kt`, and opening a note downloads its
   database's properties again so options added in Notion show; every picker lists what is selected first when it opens and then keeps its order while ticking, `logic/ChoiceOrder.kt`), then the content as a
   list of blocks, each its own text field. To-do items have an × to delete them. A toolbar above the keyboard changes the block's kind,
-  adds a divider, deletes the block or starts selecting lines (a tap selects a line; the bar then has Select all, Copy as Markdown text and Delete, `logic/BlockSelection.kt`). A new line is scrolled into view just above the keyboard and no further (`logic/Reveal.kt`). When Backspace or Delete removes the line with the cursor, the cursor moves to its new line first, so the note holds still instead of jumping. The title row ends in the button that arranges the properties; the ⋮ menu has Share (the page's Notion link) and Select text: the note as plain text in one selection area, so a selection can run across lines (`SelectTextView.kt`, `logic/ReadingText.kt`; nothing can be changed there). Tapping below the content continues at the end. Moving a
+  adds a divider, an image or a file (see "Photos and files" below), deletes the block or starts selecting lines (a tap selects a line; the bar then has Select all, Copy as Markdown text and Delete, `logic/BlockSelection.kt`). A new line is scrolled into view just above the keyboard and no further (`logic/Reveal.kt`). When Backspace or Delete removes the line with the cursor, the cursor moves to its new line first, so the note holds still instead of jumping. The title row ends in the button that arranges the properties; the ⋮ menu has Share (the page's Notion link) and Select text: the note as plain text in one selection area, so a selection can run across lines (`SelectTextView.kt`, `logic/ReadingText.kt`; nothing can be changed there). Tapping below the content continues at the end. Moving a
   note to the trash asks first, then the screen it closes to offers Undo (see "Trash" below).
 - **Properties per database** (`logic/PropertyLayouts.kt`, `ui/note/PropertyArranger.kt`): as in
   Notion, every property is shown until the user hides it; hidden ones are folded away under "N
@@ -309,6 +309,22 @@ ViewModels (ui/*/…ViewModel) ── StateFlow<UiState> ── Composables
   downloaded meanwhile. Rows and columns are not added or removed in the app.
   Anything else is an outlined box with its kind, "Can't be shown or edited here" and an "Open in
   Notion" button that opens the page at that block.
+- **Photos and files** (`logic/FileUploads.kt`, `NotionClient.uploadFile`, `NotesRepository`
+  "Photos and files", `ui/note/PickedFiles.kt`, `ui/note/FileUploadViews.kt`): the toolbar's image
+  and file buttons, a files property's "Add file" and ⋮ › Add header image open the system photo
+  picker or file picker (no permission needed). The file is read into memory (at most 20 MB),
+  then sent with Notion's File Upload API in one request (`POST /file_uploads`, then
+  `/file_uploads/{id}/send` as multipart form data) with the token of the note's workspace, after
+  checking the workspace's limit (`users/me`, `bot.workspace_limits`). It is then attached by the
+  upload's ID: a new image or file block after the line with the cursor and what is nested in it
+  (the editor's edits are saved and sent first, so that line is in Notion; `insertFileBlock`
+  adds the block to the copy here and to Notion's copy, so the next save leaves it alone), a
+  files property (`changeFiles`: the page is asked for first and its files sent back as Notion
+  had them, because Notion replaces the list and only accepts its own files as a recent answer
+  had them), or the header image (`setCover`). While a file goes into the content, a placeholder
+  with a spinner shows under its line; when it failed, why, with Retry and Remove. Nothing is
+  queued: without a connection the user hears so (an upload Notion has but that isn't attached
+  is reused for a retry within 45 minutes; Notion drops it after an hour).
 - **Nested blocks** (inside a toggle, a list item, a quote, …): downloaded with the note (one
   request per block with nested content, up to 5 levels deep) and kept in the same flat list,
   each block with its `depth` and its Notion parent (`parentId`); the editor indents them 24dp per
@@ -431,7 +447,7 @@ worker/                          The sign-in helper for Connect to Notion (Cloud
 - **Persistence**: Jetpack DataStore (version already in the catalog). Wrap it behind a small
   repository interface so logic tests can use a fake. Decide per value whether it is backed up
   (see "Backup" below).
-- **Network: only Notion's API**, only in `data/api/NotionClient.kt`, and Noter's sign-in helper
+- **Network: only Notion's API** (also for photos and files sent to Notion), only in `data/api/NotionClient.kt`, and Noter's sign-in helper
   (`worker/`), only in `data/api/SignInClient.kt` (and Notion's link back from it), plus the images in notes
   (Coil, `NoterApp.newImageLoader`). No analytics, crash
   reporting or ads (see `CLAUDE.md` and `PRIVACY.md`).

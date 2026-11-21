@@ -333,6 +333,7 @@ data class PageRef(
     val title: String,
 )
 
+/** A file of a files property: its name and link (one Notion hosts works for about an hour). */
 @Serializable
 data class FileRef(
     val name: String,

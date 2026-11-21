@@ -230,6 +230,38 @@ object PropertyCodec {
         }
     }
 
+    /**
+     * The value for writing a files property back: [current] (the files the page has in Notion,
+     * as Notion just sent them), without the one at [removeAt] when it is still called
+     * [removeName] (else the first one called that), and with [added] (name and upload ID of
+     * each) at the end.
+     *
+     * Notion replaces the whole list, so the files that stay are sent back too, as they came: a
+     * file Notion hosts is only accepted as a recent answer had it (its link works for about an
+     * hour), so [current] must come from Notion just before.
+     */
+    fun filesRequest(
+        current: List<JsonObject>,
+        removeAt: Int? = null,
+        removeName: String? = null,
+        added: List<Pair<String, String>> = emptyList(),
+    ): Map<String, Any?> {
+        val removed = removeAt?.takeIf { i -> removeName != null && current.getOrNull(i)?.stringOrNull("name") == removeName }
+            ?: removeName?.let { name -> current.indexOfFirst { it.stringOrNull("name") == name }.takeIf { it >= 0 } }
+        val kept = current.filterIndexed { i, _ -> i != removed }
+        val new = added.map { (name, id) -> mapOf("name" to fileName(name), "type" to "file_upload", "file_upload" to mapOf("id" to id)) }
+        return mapOf("files" to kept + new)
+    }
+
+    /** Notion takes names of at most 100 characters in a files property: a longer one keeps its extension. */
+    fun fileName(name: String): String {
+        if (name.length <= MAX_FILE_NAME) return name
+        val ext = name.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length < 10 }?.let { ".$it" }.orEmpty()
+        return name.take(MAX_FILE_NAME - ext.length) + ext
+    }
+
+    private const val MAX_FILE_NAME = 100
+
     /** Properties for creating a page: only the ones that have a value. */
     fun toCreateRequest(properties: List<NoteProperty>): Map<String, Any?> =
         properties.filter { it.isEditable && (!it.isEmpty || it.type == "title") }

@@ -1,6 +1,6 @@
 # Privacy policy
 
-_Last updated: 2026-10-21 (Connect to Notion)_
+_Last updated: 2026-11-21 (photos and files)_
 
 Noter (listed on the Play Store as Noter for Notion) shows and edits notes in **your own Notion workspace**. It has no server that keeps your data
 (only a small sign-in helper that stores nothing, see below), no analytics, no advertising and no
@@ -13,8 +13,8 @@ crash reporting.
   can read the pages and databases you can see in Notion; with an integration's key only the ones
   you shared with it. If you add tokens for several workspaces (Settings › Workspaces), each
   is used only for that workspace's pages, and searches ask every workspace. It reads the notes you open and the lists you show (Browse searches by
-  title), and writes the changes you make (titles, properties, note content, moving a note to
-  Notion's trash, and taking a page out of it again: Undo after trashing, or Settings › Trash,
+  title), and writes the changes you make (titles, properties, note content, photos and files you
+  add, moving a note to Notion's trash, and taking a page out of it again: Undo after trashing, or Settings › Trash,
   which lists what Notion's trash holds for 30 days).
   When you open a note's comments (and quietly when you open a note, to count them),
   it reads that page's comments from Notion, and it writes, changes or deletes a comment only when you
@@ -33,6 +33,11 @@ crash reporting.
   image links to. Those websites see an ordinary image request from your phone (its IP address),
   as a browser would; nothing about you or your notes is sent with it. Files, videos and links
   in a note are only opened (in your browser) when you tap them.
+- **Photos and files you add to a note** (an image or file in the content, a file in a files
+  property, a header image) are sent to Notion's API (`api.notion.com`) and stored in your
+  workspace like a file you upload in Notion. You choose each one in Android's own photo picker or
+  file picker, so the app can't see your other photos or files. The file is read once to send it
+  and isn't kept on the phone; nothing is sent later without a connection.
 - **Links you share to the app**: when you share a web link to Noter from another app, Noter
   downloads that one page from its website, once, to copy its text and images into the new note
   (the images themselves stay on that website, and Notion and your phone load them from there).
@@ -63,7 +68,8 @@ crash reporting.
 ## Permissions
 
 - **Internet**, to reach Notion's API and the sign-in helper, download the images in your notes and download a page
-  you share to the app. No other permissions.
+  you share to the app. No other permissions: photos and files are chosen in Android's own
+  pickers, which need none.
 
 ## Deleting your data
 

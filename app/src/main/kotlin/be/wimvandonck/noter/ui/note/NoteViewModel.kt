@@ -1,5 +1,6 @@
 package be.wimvandonck.noter.ui.note
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
@@ -7,6 +8,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import be.wimvandonck.noter.NoterApp
 import be.wimvandonck.noter.data.NotesRepository
+import be.wimvandonck.noter.data.UploadException
+import be.wimvandonck.noter.data.UploadProblem
 import be.wimvandonck.noter.ui.common.DatabaseCreation
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.CustomEmoji
@@ -33,6 +36,8 @@ import be.wimvandonck.noter.logic.NoteTemplates
 import be.wimvandonck.noter.logic.DatabaseSetups
 import be.wimvandonck.noter.logic.DocumentEditor
 import be.wimvandonck.noter.logic.EditResult
+import be.wimvandonck.noter.logic.FileUploads
+import be.wimvandonck.noter.logic.PickedFile
 import be.wimvandonck.noter.logic.NestedContent
 import be.wimvandonck.noter.logic.NotionViews
 import be.wimvandonck.noter.logic.PropertyLayouts
@@ -54,6 +59,32 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/** Where a photo or file the user picked goes. */
+sealed interface UploadTarget {
+    /** A new image or file block after the line [afterKey] (null: at the end of the note). */
+    data class Content(val afterKey: String?, val image: Boolean) : UploadTarget
+
+    /** Files property [name]. */
+    data class Property(val name: String) : UploadTarget
+
+    /** The note's header image. */
+    data object Cover : UploadTarget
+}
+
+/**
+ * A photo or file on its way to Notion: [name] is empty while it is still being read on the
+ * phone. [problem]: it failed (only kept for files going into the content, to try again or remove).
+ */
+data class FileUploadState(
+    val id: Long,
+    val target: UploadTarget,
+    val name: String = "",
+    val problem: UploadProblem? = null,
+    val detail: String = "",
+)
 
 /** Where the cursor should go after an edit that changed the structure (new line, joined lines, …). */
 data class FocusTarget(val key: String, val cursor: Int, val serial: Long)
@@ -82,6 +113,8 @@ data class NoteUiState(
     val quickActions: List<QuickAction> = emptyList(),
     /** The order the note's database's Notion view lists the properties in, used until the user arranges them. */
     val viewOrder: List<String> = emptyList(),
+    /** Photos and files on their way to Notion (or that failed to go). */
+    val uploads: List<FileUploadState> = emptyList(),
 ) {
     /** The content can be edited: not while the note's full content is still on its way. */
     val editable: Boolean get() = nested != NestedContent.State.LOADING
@@ -109,6 +142,7 @@ class NoteViewModel(
     private val repository: NotesRepository,
     /** Every workspace with a token, for "Move to…". */
     workspaces: Flow<List<Workspace>>,
+    private val pickedFiles: PickedFiles,
 ) : ViewModel() {
     private val editor = DocumentEditor()
     private val blocks = MutableStateFlow<List<Block>>(emptyList())
@@ -134,6 +168,10 @@ class NoteViewModel(
     private var serial = 0L
 
     private val syncing = MutableStateFlow(false)
+    private val uploads = MutableStateFlow<List<FileUploadState>>(emptyList())
+
+    /** Saving the content waits while a file block is being added (see [addToContent]). */
+    private val saveMutex = Mutex()
     private val extras = combine(users, relatedPages, contentError) { u, r, e -> Triple(u, r, e) }
     private val syncStatus = combine(repository.pendingCount, repository.offline, syncing) { p, o, s -> Triple(p, o, s) }
 
@@ -163,6 +201,8 @@ class NoteViewModel(
         state.copy(pendingCount = pending, offline = offline, syncing = busy)
     }.combine(downloading) { state, busy ->
         state.copy(nested = NestedContent.state(state.blocks, busy))
+    }.combine(uploads) { state, list ->
+        state.copy(uploads = list)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NoteUiState())
 
     init {
@@ -309,7 +349,7 @@ class NoteViewModel(
         saveJob = viewModelScope.launch {
             delay(wait)
             firstUnsavedMs = 0L
-            repository.saveContent(pageId, savable())
+            saveMutex.withLock { repository.saveContent(pageId, savable()) }
         }
     }
 
@@ -318,6 +358,135 @@ class NoteViewModel(
         blocks.value.let { list ->
             if (list.size == 1 && list[0].notionId == null && list[0].text.isEmpty() && list[0].type == BlockType.PARAGRAPH) emptyList() else list
         }
+
+    // ---- Photos and files ----
+
+    /** Something the note's screen says once about a photo or file. */
+    sealed interface UploadNotice {
+        /** Bigger than Notion takes: [limitBytes]. */
+        data class TooLarge(val limitBytes: Long) : UploadNotice
+
+        /** It couldn't be read on the phone. */
+        data object Unreadable : UploadNotice
+
+        /** A files property or the header image couldn't be changed. */
+        data class Failed(val problem: UploadProblem, val detail: String) : UploadNotice
+    }
+
+    private val _uploadNotices = MutableSharedFlow<UploadNotice>(extraBufferCapacity = 4)
+    val uploadNotices: SharedFlow<UploadNotice> = _uploadNotices
+
+    private var uploadSerial = 0L
+
+    /** The files read for each upload, kept to try again (only while the note is open). */
+    private val pickedById = mutableMapOf<Long, PickedFile>()
+
+    /** Uploads Notion already has but that aren't attached yet, by upload, with when they were sent (reused within the hour). */
+    private val sentById = mutableMapOf<Long, Pair<String, Long>>()
+
+    /** The user picked [uri] (a photo or a file) to go to [target]: it is read and sent at once. */
+    fun addFile(uri: Uri, target: UploadTarget) {
+        if (target is UploadTarget.Content && !editable()) return
+        val id = ++uploadSerial
+        uploads.update { it + FileUploadState(id, target) }
+        viewModelScope.launch {
+            when (val read = pickedFiles.read(uri)) {
+                is ReadFile.Read -> {
+                    pickedById[id] = read.file
+                    uploads.update { list -> list.map { if (it.id == id) it.copy(name = read.file.name) else it } }
+                    send(id)
+                }
+                ReadFile.TooLarge -> {
+                    dropUpload(id)
+                    _uploadNotices.tryEmit(UploadNotice.TooLarge(FileUploads.SINGLE_PART_MAX_BYTES))
+                }
+                ReadFile.Failed -> {
+                    dropUpload(id)
+                    _uploadNotices.tryEmit(UploadNotice.Unreadable)
+                }
+            }
+        }
+    }
+
+    /** Tries a failed photo or file again. */
+    fun retryUpload(id: Long) {
+        if (uploads.value.none { it.id == id && it.problem != null }) return
+        uploads.update { list -> list.map { if (it.id == id) it.copy(problem = null, detail = "") else it } }
+        viewModelScope.launch { send(id) }
+    }
+
+    /** Leaves a failed photo or file out. */
+    fun removeUpload(id: Long) = dropUpload(id)
+
+    private fun dropUpload(id: Long) {
+        uploads.update { list -> list.filterNot { it.id == id } }
+        pickedById.remove(id)
+        sentById.remove(id)
+    }
+
+    private suspend fun send(id: Long) {
+        val file = pickedById[id] ?: return
+        val target = uploads.value.firstOrNull { it.id == id }?.target ?: return
+        try {
+            val kept = sentById[id]?.takeIf { System.currentTimeMillis() - it.second < UPLOAD_REUSE_MS }?.first
+            val uploadId = kept ?: repository.uploadFile(pageId, file).also { sentById[id] = it to System.currentTimeMillis() }
+            when (target) {
+                is UploadTarget.Content -> addToContent(target.afterKey, uploadId, FileUploads.blockType(file.mimeType))
+                is UploadTarget.Property -> repository.changeFiles(pageId, target.name, added = listOf(file.name to uploadId))
+                UploadTarget.Cover -> repository.setCover(pageId, uploadId)
+            }
+            dropUpload(id)
+        } catch (e: UploadException) {
+            when {
+                e.problem == UploadProblem.TOO_LARGE -> {
+                    dropUpload(id)
+                    _uploadNotices.tryEmit(UploadNotice.TooLarge(e.limitBytes))
+                }
+                // In the content it stays as a line to try again or remove.
+                target is UploadTarget.Content ->
+                    uploads.update { list -> list.map { if (it.id == id) it.copy(problem = e.problem, detail = e.detail) else it } }
+                else -> {
+                    dropUpload(id)
+                    _uploadNotices.tryEmit(UploadNotice.Failed(e.problem, e.detail))
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds the block for upload [uploadId] after line [afterKey], in Notion and in the editor.
+     * The editor's edits are saved first (so that line goes to Notion), and no other save runs
+     * in between, so a save of the editor's older copy can't remove the new block again.
+     */
+    private suspend fun addToContent(afterKey: String?, uploadId: String, type: String) = saveMutex.withLock {
+        saveJob?.cancel()
+        firstUnsavedMs = 0L
+        repository.saveContent(pageId, savable())
+        val block = repository.insertFileBlock(pageId, afterKey, uploadId, type)
+        if (block != null) {
+            blocks.value = FileUploads.insertAfter(blocks.value, afterKey, block)
+        } else {
+            repository.cachedContent(pageId)?.let { setLoaded(it.blocks) }
+        }
+    }
+
+    /** Removes the file at [index] called [name] from files property [property] (in Notion at once). */
+    fun removeFile(property: String, index: Int, name: String) = viewModelScope.launch {
+        try {
+            repository.changeFiles(pageId, property, removeAt = index, removeName = name)
+        } catch (e: UploadException) {
+            _uploadNotices.tryEmit(UploadNotice.Failed(e.problem, e.detail))
+        }
+    }
+
+    /** Removes the note's header image (in Notion at once). */
+    fun removeCover() = viewModelScope.launch {
+        try {
+            repository.setCover(pageId, null)
+        } catch (e: UploadException) {
+            _uploadNotices.tryEmit(UploadNotice.Failed(e.problem, e.detail))
+        }
+    }
 
     // ---- Properties ----
 
@@ -444,7 +613,7 @@ class NoteViewModel(
                 if (saveJob?.isActive == true) {
                     saveJob?.cancel()
                     firstUnsavedMs = 0L
-                    repository.saveContent(pageId, savable())
+                    saveMutex.withLock { repository.saveContent(pageId, savable()) }
                 }
                 pendingProperties.values.toList().forEach { repository.updateProperty(pageId, it) }
                 val before = blocks.value
@@ -570,6 +739,9 @@ class NoteViewModel(
     }
 
     companion object {
+        /** Notion drops an upload not attached within an hour: one sent before is reused for a while less than that. */
+        private const val UPLOAD_REUSE_MS = 45 * 60_000L
+
         fun factory(pageId: String) = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as NoterApp
@@ -577,6 +749,7 @@ class NoteViewModel(
                     pageId,
                     app.repository,
                     combine(app.apiKeyStore.main, app.apiKeyStore.extras) { main, extras -> Workspaces.of(listOf(main) + extras) },
+                    PickedFiles(app),
                 )
             }
         }

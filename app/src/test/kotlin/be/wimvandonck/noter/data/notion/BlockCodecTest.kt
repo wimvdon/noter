@@ -196,4 +196,13 @@ class BlockCodecTest {
             (BlockCodec.toUpdateRequest(block)["code"] as Map<*, *>)["rich_text"],
         )
     }
+
+    @Test
+    fun `a new image or file block points at its upload`() {
+        assertEquals(
+            mapOf("object" to "block", "type" to "image", "image" to mapOf("type" to "file_upload", "file_upload" to mapOf("id" to "up-1"))),
+            BlockCodec.fileUploadRequest("image", "up-1"),
+        )
+        assertEquals("file_upload", (BlockCodec.fileUploadRequest("file", "up-2")["file"] as Map<*, *>)["type"])
+    }
 }
