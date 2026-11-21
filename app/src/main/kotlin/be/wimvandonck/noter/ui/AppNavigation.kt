@@ -37,6 +37,8 @@ import be.wimvandonck.noter.ui.main.SearchScreen
 import be.wimvandonck.noter.ui.note.NoteScreen
 import be.wimvandonck.noter.ui.settings.SettingsScreen
 import be.wimvandonck.noter.ui.settings.SettingsViewModel
+import be.wimvandonck.noter.ui.settings.TrashScreen
+import be.wimvandonck.noter.ui.settings.TrashViewModel
 import be.wimvandonck.noter.ui.theme.Motion
 import be.wimvandonck.noter.ui.theme.rememberReducedMotion
 import kotlinx.coroutines.delay
@@ -76,7 +78,7 @@ private class ScreenOwner(
  */
 @Composable
 fun AppNavigation() {
-    // Entries: "main", "search", "settings", "note:<page id>" or "database:<database id>".
+    // Entries: "main", "search", "settings", "trash", "note:<page id>" or "database:<database id>".
     var stack by rememberSaveable { mutableStateOf(listOf(MAIN)) }
     val mainViewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)
     val stores: ScreenStores = viewModel()
@@ -153,6 +155,11 @@ fun AppNavigation() {
                     top == SETTINGS -> SettingsScreen(
                         viewModel = viewModel(factory = SettingsViewModel.Factory),
                         onBack = ::pop,
+                        onOpenTrash = { push(TRASH) },
+                    )
+                    top == TRASH -> TrashScreen(
+                        viewModel = viewModel(factory = TrashViewModel.Factory),
+                        onBack = ::pop,
                     )
                     top.startsWith(NOTE) -> NoteScreen(
                         pageId = top.removePrefix(NOTE),
@@ -175,6 +182,7 @@ private const val CLEAR_DELAY_MS = 1_000L
 private const val MAIN = "main"
 private const val SEARCH = "search"
 private const val SETTINGS = "settings"
+private const val TRASH = "trash"
 // The same keys as launcher shortcuts use (#76).
 private const val NOTE = LauncherShortcuts.NOTE
 private const val DATABASE = LauncherShortcuts.DATABASE

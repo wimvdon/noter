@@ -25,6 +25,8 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import be.wimvandonck.noter.R
+import be.wimvandonck.noter.ui.common.TrashUndoEffect
 import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.logic.SearchKind
 import be.wimvandonck.noter.ui.theme.readableWidth
@@ -67,11 +70,14 @@ fun SearchScreen(
     val state by viewModel.search.collectAsStateWithLifecycle()
     val home by viewModel.state.collectAsStateWithLifecycle()
     val focus = remember { FocusRequester() }
+    val snackbar = remember { SnackbarHostState() }
+    TrashUndoEffect(snackbar)
     LaunchedEffect(Unit) {
         if (state.results == null || state.query.isNotEmpty()) viewModel.search(state.query)
         runCatching { focus.requestFocus() }
     }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 navigationIcon = {

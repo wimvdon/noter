@@ -98,6 +98,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import be.wimvandonck.noter.R
+import be.wimvandonck.noter.ui.common.TrashUndoEffect
 import be.wimvandonck.noter.ui.common.NoterSheet
 import be.wimvandonck.noter.ui.common.NewDatabaseDialog
 import be.wimvandonck.noter.ui.common.showDatabaseCreatedToast
@@ -170,6 +171,7 @@ fun MainScreen(
             snackbar.showSnackbar(text)
         }
     }
+    TrashUndoEffect(snackbar)
     LoadPreviews(notes, viewModel::loadPreviews)
 
     Scaffold(

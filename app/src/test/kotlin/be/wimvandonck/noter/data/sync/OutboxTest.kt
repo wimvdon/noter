@@ -49,6 +49,34 @@ class OutboxTest {
     }
 
     @Test
+    fun `restoring a trash that was not sent yet takes the trash back`() {
+        var queue = Outbox.add(emptyList(), PendingOp.SaveContent("q"))
+        queue = Outbox.add(queue, PendingOp.TrashPage("p"))
+        queue = Outbox.add(queue, PendingOp.RestorePage("p"))
+        assertEquals(listOf(PendingOp.SaveContent("q")), queue)
+    }
+
+    @Test
+    fun `restoring a trash that is being sent waits behind it`() {
+        val trash = PendingOp.TrashPage("p")
+        val queue = Outbox.add(listOf(trash), PendingOp.RestorePage("p"), sending = trash)
+        assertEquals(listOf(trash, PendingOp.RestorePage("p")), queue)
+    }
+
+    @Test
+    fun `restoring a trash that was sent queues a restore once`() {
+        var queue = Outbox.add(emptyList(), PendingOp.RestorePage("p"))
+        queue = Outbox.add(queue, PendingOp.RestorePage("p"))
+        assertEquals(listOf(PendingOp.RestorePage("p")), queue)
+    }
+
+    @Test
+    fun `trashing again cancels a restore that was not sent`() {
+        val queue = Outbox.add(listOf(PendingOp.RestorePage("p")), PendingOp.TrashPage("p"))
+        assertEquals(listOf(PendingOp.TrashPage("p")), queue)
+    }
+
+    @Test
     fun `renaming moves queued changes to the Notion ID`() {
         val queue = Outbox.rename(listOf(PendingOp.SaveContent("local-1"), PendingOp.SaveContent("x")), "local-1", "n1")
         assertEquals(listOf(PendingOp.SaveContent("n1"), PendingOp.SaveContent("x")), queue)

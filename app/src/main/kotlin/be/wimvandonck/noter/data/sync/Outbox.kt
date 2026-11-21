@@ -48,6 +48,11 @@ sealed interface PendingOp {
     @SerialName("trash")
     data class TrashPage(override val pageId: String) : PendingOp
 
+    /** The page comes out of Notion's trash again (Undo after the trash was already sent). */
+    @Serializable
+    @SerialName("restore")
+    data class RestorePage(override val pageId: String) : PendingOp
+
     /** The page's icon becomes [emoji], or is removed when it is null. */
     @Serializable
     @SerialName("icon")
@@ -60,7 +65,11 @@ sealed interface PendingOp {
  * content together with the create, so those edits need no op of their own.
  */
 object Outbox {
-    fun add(queue: List<PendingOp>, op: PendingOp): List<PendingOp> {
+    /**
+     * [sending] is the change being sent right now: it can't be taken back any more, so a restore
+     * for it waits behind it.
+     */
+    fun add(queue: List<PendingOp>, op: PendingOp, sending: PendingOp? = null): List<PendingOp> {
         val local = op.pageId.startsWith(NoteSummary.LOCAL_PREFIX)
         return when (op) {
             is PendingOp.CreatePage -> queue + op
@@ -88,6 +97,15 @@ object Outbox {
                 } else {
                     queue.filterNot { it.pageId == op.pageId } + op
                 }
+            is PendingOp.RestorePage -> {
+                // A trash that wasn't sent yet is simply taken back; one that was needs a restore.
+                val unsent = queue.indexOfFirst { it is PendingOp.TrashPage && it.pageId == op.pageId && it != sending }
+                when {
+                    unsent >= 0 -> queue.filterIndexed { i, _ -> i != unsent }
+                    local -> queue
+                    else -> queue.filterNot { it == op } + op
+                }
+            }
         }
     }
 
@@ -102,6 +120,7 @@ object Outbox {
                     is PendingOp.SetProperty -> op.copy(pageId = newId)
                     is PendingOp.SaveContent -> op.copy(pageId = newId)
                     is PendingOp.TrashPage -> op.copy(pageId = newId)
+                    is PendingOp.RestorePage -> op.copy(pageId = newId)
                     is PendingOp.SetIcon -> op.copy(pageId = newId)
                 }
             }

@@ -123,6 +123,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import be.wimvandonck.noter.R
+import be.wimvandonck.noter.ui.common.TrashUndoEffect
 import be.wimvandonck.noter.ui.common.NewDatabaseDialog
 import be.wimvandonck.noter.ui.common.showDatabaseCreatedToast
 import be.wimvandonck.noter.ui.common.SyncButton
@@ -219,6 +220,7 @@ fun NoteScreen(
     // The database whose quick actions are open from ⋮ (null: closed).
     var quickActionsFor by remember { mutableStateOf<String?>(null) }
     val noteScope = rememberCoroutineScope()
+    TrashUndoEffect(snackbar, ignore = pageId)
     val openFailed by viewModel.openFailed.collectAsStateWithLifecycle()
     val openFailedText = stringResource(R.string.page_open_failed)
     LaunchedEffect(openFailed) {

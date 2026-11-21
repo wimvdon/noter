@@ -2,6 +2,10 @@ package be.wimvandonck.noter.ui.settings
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import be.wimvandonck.noter.ui.theme.SettingItem
 import be.wimvandonck.noter.data.model.HiddenItem
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Row
@@ -47,7 +51,7 @@ import be.wimvandonck.noter.ui.theme.SettingsScaffold
 import be.wimvandonck.noter.ui.theme.rememberAppVersion
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenTrash: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -65,6 +69,18 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             item(key = "hidden") {
                 SettingsSection(title = stringResource(R.string.section_hidden_on_home)) {
                     SettingsBlock { HiddenSettings(state.settings.hiddenOnHome, viewModel::showOnHome) }
+                }
+            }
+        }
+        if (state.workspaces.isNotEmpty()) {
+            item(key = "trash") {
+                SettingsSection(title = stringResource(R.string.section_trash)) {
+                    SettingItem(
+                        title = stringResource(R.string.settings_trash),
+                        summary = stringResource(R.string.settings_trash_summary),
+                        onClick = onOpenTrash,
+                        icon = rememberVectorPainter(Icons.Rounded.DeleteOutline),
+                    )
                 }
             }
         }

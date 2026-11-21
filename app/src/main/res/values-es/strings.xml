@@ -291,6 +291,17 @@
     <string name="view_settings">Ajustes de vistas</string>
     <string name="edit_views_in_notion">Editar vistas en Notion</string>
     <string name="more_in_notion">Más opciones en Notion</string>
+    <!-- Trash (undo and the Trash list) -->
+    <string name="trash_moved">Movido a la papelera</string>
+    <string name="section_trash">Notas y páginas</string>
+    <string name="settings_trash">Papelera</string>
+    <string name="settings_trash_summary">Recupera lo que moviste a la papelera de Notion en los últimos 30 días.</string>
+    <string name="trash_empty_title">La papelera está vacía</string>
+    <string name="trash_empty_body">Las páginas que mueves a la papelera en Notion aparecen aquí durante 30 días.</string>
+    <string name="trash_restore">Restaurar</string>
+    <string name="trash_restored">Restaurado</string>
+    <string name="trash_restore_failed">No se pudo restaurar: %1$s</string>
+    <string name="trash_in">En %1$s</string>
     <string name="action_move_to">Mover a…</string>
     <string name="move_kind_page">Página</string>
     <string name="move_kind_database">Base de datos</string>

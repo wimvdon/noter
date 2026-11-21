@@ -167,7 +167,7 @@ properties and content: the pages of databases and pages on their own.
   database's properties again so options added in Notion show; every picker lists what is selected first when it opens and then keeps its order while ticking, `logic/ChoiceOrder.kt`), then the content as a
   list of blocks, each its own text field. To-do items have an × to delete them. A toolbar above the keyboard changes the block's kind,
   adds a divider, deletes the block or starts selecting lines (a tap selects a line; the bar then has Select all, Copy as Markdown text and Delete, `logic/BlockSelection.kt`). A new line is scrolled into view just above the keyboard and no further (`logic/Reveal.kt`). When Backspace or Delete removes the line with the cursor, the cursor moves to its new line first, so the note holds still instead of jumping. The title row ends in the button that arranges the properties; the ⋮ menu has Share (the page's Notion link) and Select text: the note as plain text in one selection area, so a selection can run across lines (`SelectTextView.kt`, `logic/ReadingText.kt`; nothing can be changed there). Tapping below the content continues at the end. Moving a
-  note to the trash asks first.
+  note to the trash asks first, then the screen it closes to offers Undo (see "Trash" below).
 - **Properties per database** (`logic/PropertyLayouts.kt`, `ui/note/PropertyArranger.kt`): as in
   Notion, every property is shown until the user hides it; hidden ones are folded away under "N
   more properties". The tune button turns the properties into a list to arrange in place: drag a
@@ -185,7 +185,7 @@ properties and content: the pages of databases and pages on their own.
   from RSS Reader), drawn as vectors, for the closest match to a Notion icon (`logic/PageIcons.kt`).
 - **Settings** (`ui/settings/`): Workspaces (every workspace with how it was added, a Connect to
   Notion button and Advanced), the databases and pages hidden from Home's list with Show (only
-  when there are any, #108) and Appearance; built from the shared `SettingsKit.kt`.
+  when there are any, #108), Trash (opens the Trash screen) and Appearance; built from the shared `SettingsKit.kt`.
   Advanced (`AddWorkspaceDialog.kt`) first asks which token, each with what it is best for
   (`logic/WorkspaceWays.kt`): a personal access token or a connection token; it then shows where
   Notion makes one and a field to paste it. A build without Connect to Notion shows an Add
@@ -349,6 +349,20 @@ ViewModels (ui/*/…ViewModel) ── StateFlow<UiState> ── Composables
   downloaded one note at a time (at most 24 per round).
 - **Order, pins and hidden entries** are only on this phone (`AppSettings.order`, `AppSettings.pinned`,
   `AppSettings.pinnedDatabases`, `AppSettings.hiddenOnHome`); Notion is not changed.
+- **Trash** (`NotesRepository.trashNote`, `undoTrash`, `trashedPages`, `restoreFromTrash`;
+  `ui/settings/TrashScreen.kt`). A note goes to the trash as a queued change (`PendingOp.TrashPage`);
+  the repository keeps the note, its place, content, pin and dropped changes in memory
+  (`TrashedNote`, `lastTrashed`), and the screen it closes to shows "Moved to trash" with Undo
+  (`ui/common/TrashUndo.kt`; the note's own screen leaves it alone). Undo takes a trash that wasn't
+  sent out of the queue, otherwise queues `PendingOp.RestorePage` behind it (`Outbox.add` is told
+  which change is being sent), and a refresh keeps a note whose restore is still waiting. Settings ›
+  Trash (online only, nothing queued) lists the pages in Notion's trash with `POST /search`
+  (`filter: {property: "object", value: "page", in_trash: true}`), newest first, up to 100 per
+  workspace, grouped by workspace when there are several (`logic/TrashList.kt`). Each row shows the
+  name of what the page was in, from this phone or asked from Notion (at most 10 places per
+  opening). Restore sends `PATCH /pages/{id}` with `in_trash: false`, then the page shows in its
+  database's copy on the phone, or Home's list is asked again. Notion empties the trash after 30
+  days, so there is no delete forever.
 
 ### Where data lives
 | What | Where | Backed up |
