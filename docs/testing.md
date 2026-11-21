@@ -35,8 +35,6 @@ node --test worker/test/noter-sign-in.test.mjs
 | `logic/DatabaseEditTest` | What a database's new name or icon (an emoji or a custom emoji) sends to Notion, and which rows, pins and kept names change |
 | `data/notion/IconCodecTest`, `data/sync/OutboxIconTest` | Reading icons and the workspace's custom emojis, the icon body sent for an emoji, a custom emoji (by ID) or none, and icon changes queued before custom emojis existed still reading |
 | `data/api/CustomEmojiClientTest`, `data/NotesRepositoryTest` (custom emojis) | `GET /custom_emojis` read page by page with the right workspace's token, a page's icon set to a custom emoji by ID, emojis kept a day and used when Notion can't be asked |
-| `logic/SchemaEditsTest` | Edit database's properties: what renaming, removing and adding sends to Notion (by ID, unique names, blank names), and how the kept filters, sort, cards and note layout follow |
-| `logic/DatabaseEditTest` | What a database's new name or icon sends to Notion, and which rows, pins and kept names change |
 | `logic/SchemaEditsTest` | Edit database's properties: what renaming, removing and adding sends to Notion (by ID, unique names, blank names), what adding, removing, recolouring and regrouping options sends (existing ones by ID, new names unique, status groups), and how the kept filters, sort, cards and note layout follow |
 | `logic/StatusDefaultsTest` | A status' default option: found with its colour, shown for an empty status (display only), never for other types |
 | `logic/SubpageTitlesTest` | A page's subpage and database titles follow Notion, and only those blocks change |
