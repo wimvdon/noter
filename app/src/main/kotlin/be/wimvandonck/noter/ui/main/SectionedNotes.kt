@@ -118,6 +118,7 @@ internal fun SectionedNoteGrid(
                         databaseIcon = null,
                         chipProperty = state.cardProperty,
                         layout = state.propertyLayouts[note.databaseId],
+                        statusDefaults = state.statusDefaults[note.databaseId].orEmpty(),
                         lifted = false,
                         onOpen = { if (pressedKey != key) onOpen(note.id) },
                         menu = {
