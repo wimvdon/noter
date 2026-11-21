@@ -52,6 +52,20 @@ known configuration) until the owner arranges them; hidden ones still show, afte
 The title is left out of both. Rejected: more than three properties on a card (the cards are
 narrow), and copying Notion's card size and layout (not worth the settings it would need).
 
+## 2026-11-21: A view's quick filters are chips under the tabs
+
+A view's quick filters (Notion's pinned filter pills) show as a row of chips below the view tabs.
+They start off, so a view opens as its filter says (before, every quick filter with a value was
+always added to the query, with no way to turn it off). A tap turns one on and the view's notes
+are asked again with its condition added to the view's filter; a chip without a value opens a small
+menu for select, status, multi-select, checkbox and people ("Me") values. Which chips are on is
+kept per view while the app runs, not stored or backed up. The notes of each combination are
+cached like a view's own, so turning a chip off or on again shows them at once. Offline the chips
+are disabled and the view's cached notes show: Notion's conditions aren't redone on the phone.
+Rejected: choosing any value for other property kinds (it would need the filter editor Notion
+already has), and the old retry without quick filters when Notion refused the query (it would
+show notes that aren't filtered under a chip that says they are).
+
 ## 2026-11-12: The view tabs follow Notion; the view settings only set the cards
 
 Listed by database, the view tabs turned out to come in Notion's order after all, so arranging
