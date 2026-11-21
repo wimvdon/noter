@@ -3,6 +3,7 @@ package be.wimvandonck.noter.data.notion
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import be.wimvandonck.noter.data.model.NotionView
+import be.wimvandonck.noter.data.model.ViewGroupBy
 import kotlinx.serialization.decodeFromString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -69,5 +70,23 @@ class ViewCodecTest {
         val old = Json { ignoreUnknownKeys = true }.decodeFromString<NotionView>("""{"id":"v1","name":"All","type":"table"}""")
         assertNull(old.visibleProperties)
         assertNull(old.cover)
+        assertNull(old.groupBy)
+        assertNull(old.datePropertyId)
+    }
+
+    @Test
+    fun `a board's grouping and a calendar's date property are read from the configuration`() {
+        val board = parse(
+            """{"object":"view","id":"v1","type":"board","configuration":{"type":"board",
+               "group_by":{"type":"status","property_id":"st","group_by":"group","sort":{"type":"descending"},"hide_empty_groups":true}}}""",
+        )!!
+        assertEquals(ViewGroupBy("status", "st", by = "group", sort = "descending", hideEmpty = true), board.groupBy)
+        assertNull(board.datePropertyId)
+        val plain = parse("""{"object":"view","id":"v1","type":"board","configuration":{"group_by":{"type":"select","property_id":"p"}}}""")!!
+        assertEquals(ViewGroupBy("select", "p"), plain.groupBy)
+        val calendar = parse("""{"object":"view","id":"v2","type":"calendar","configuration":{"type":"calendar","date_property_id":"due","view_range":"month"}}""")!!
+        assertEquals("due", calendar.datePropertyId)
+        assertNull(calendar.groupBy)
+        assertNull(parse("""{"object":"view","id":"v3","type":"table","configuration":{"group_by":null}}""")!!.groupBy)
     }
 }

@@ -119,6 +119,15 @@
         <item quantity="one">%d verknüpfte Seite</item>
         <item quantity="other">%d verknüpfte Seiten</item>
     </plurals>
+    <!-- Sections of a board or calendar view (logic/ViewSections.kt). -->
+    <string name="section_none">Ohne %1$s</string>
+    <string name="day_tomorrow">Morgen</string>
+    <string name="day_yesterday">Gestern</string>
+    <string name="section_no_date">Ohne Datum</string>
+    <plurals name="section_notes">
+        <item quantity="one">%d Notiz</item>
+        <item quantity="other">%d Notizen</item>
+    </plurals>
     <string name="cards_title">Karten</string>
     <string name="cards_follow_notion">Notion folgen</string>
     <string name="cards_follow_notion_hint">Karten zeigen die Eigenschaften und das Titelbild der aktuellen Notion-Ansicht. Ausschalten, um sie selbst zu wählen.</string>

@@ -25,6 +25,7 @@ import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.data.store.AppSettings
 import be.wimvandonck.noter.logic.DatabaseSetups
 import be.wimvandonck.noter.logic.NoteLists
+import be.wimvandonck.noter.logic.NoteSection
 import be.wimvandonck.noter.logic.NoteSearch
 import be.wimvandonck.noter.logic.NoteTargets
 import be.wimvandonck.noter.logic.HiddenOnHome
@@ -86,6 +87,11 @@ data class NotesUiState(
     val setup: DatabaseSetup? = null,
     /** Notion can't find the data source (deleted, in the trash, or no access). */
     val sourceMissing: Boolean = false,
+    /**
+     * A board, a grouped view or a calendar: [pinned] and [others] in the view's sections (see
+     * ViewSections); null: one list.
+     */
+    val sections: List<NoteSection>? = null,
 ) {
 }
 

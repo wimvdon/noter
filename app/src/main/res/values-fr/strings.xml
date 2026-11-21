@@ -122,6 +122,16 @@
         <item quantity="many">%d pages liées</item>
         <item quantity="other">%d pages liées</item>
     </plurals>
+    <!-- Sections of a board or calendar view (logic/ViewSections.kt). -->
+    <string name="section_none">Sans %1$s</string>
+    <string name="day_tomorrow">Demain</string>
+    <string name="day_yesterday">Hier</string>
+    <string name="section_no_date">Sans date</string>
+    <plurals name="section_notes">
+        <item quantity="one">%d note</item>
+        <item quantity="many">%d notes</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
     <string name="cards_title">Cartes</string>
     <string name="cards_follow_notion">Suivre Notion</string>
     <string name="cards_follow_notion_hint">Les cartes affichent les propriétés et l\'image d\'en-tête de la vue Notion ouverte. Désactivez pour les choisir vous-même.</string>

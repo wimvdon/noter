@@ -2,6 +2,24 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Board and calendar views as sections
+
+A board, calendar or timeline view used to show its notes as one list. The view's `configuration`
+says how Notion lays them out: `group_by` (`type`, `property_id`, `sort.type`, `hide_empty_groups`,
+for a status also `group_by`: "group" or "option") and, for calendars and timelines,
+`date_property_id`. `ViewCodec` now reads both, and `logic/ViewSections.kt` puts the notes in
+sections, one below the other: per option (in the property's order, a status in the order of its
+groups; status groups come from the data source's schema), per status group, checked or not, or per
+person, with a "No …" section for empty values last; a note with several options or people is in
+each of their sections, as in Notion. A calendar or timeline becomes an agenda with a section per
+day (Today, Tomorrow, then dates), a date with a time counted on the phone's day, undated notes
+last; it opens at today. Headers can be folded away on the phone. Nothing is set up in Noter:
+grouping is changed in Notion. Rejected: a sideways kanban (too cramped on a phone) and a month grid
+(the agenda reads better). The API doesn't say which groups a view hides or how they were ordered
+by hand, so every group shows in the property's order (unless the view hides empty ones). A
+timeline item shows on its start day only. Other kinds of grouping (dates, numbers, text,
+relations) still show one list.
+
 ## 2026-11-21: Photos and files go to Notion at once, never queued
 
 A note can get a photo or file (an image or file block after the line with the cursor, a file in

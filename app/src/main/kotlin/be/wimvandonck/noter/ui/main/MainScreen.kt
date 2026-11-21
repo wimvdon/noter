@@ -668,6 +668,13 @@ internal fun NotesPane(
                         body = stringResource(R.string.empty_database),
                     )
                 }
+                state.sections != null -> SectionedNoteGrid(
+                    state = state,
+                    sections = state.sections,
+                    previews = previews,
+                    onOpen = onOpen,
+                    onTogglePin = onTogglePin,
+                )
                 else -> NoteGrid(
                     state = state,
                     previews = previews,
@@ -1052,7 +1059,7 @@ private val AUTO_SCROLL_STEP = 12.dp
 /** A note as a card: its title, the start of its content and its labels, like a Keep note. */
 @OptIn(ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun NoteCard(
+internal fun NoteCard(
     note: NoteSummary,
     preview: String?,
     showDatabaseIcon: Boolean,

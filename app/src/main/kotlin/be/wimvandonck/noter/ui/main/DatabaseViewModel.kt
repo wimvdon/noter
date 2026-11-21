@@ -52,6 +52,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import be.wimvandonck.noter.logic.ReadOnlyBlocks
+import be.wimvandonck.noter.logic.ViewSections
+import java.time.LocalDate
+import java.time.ZoneId
 
 data class DatabaseUiState(
     /** The database's name (of the database, for one of several data sources). */
@@ -205,7 +208,11 @@ class DatabaseViewModel(
                 base, setup, db, settings, id, members,
                 viewLoading = listStatus?.asking == true || resultStatus?.asking == true,
                 viewError = (if (viewId == null) listStatus?.error else resultStatus?.error),
-            ),
+            ).let { notes ->
+                // A board or calendar: its notes in sections, as Notion shows them.
+                val zone = ZoneId.systemDefault()
+                notes.copy(sections = ViewSections.of(viewShown, db?.schema, notes.pinned + notes.others, LocalDate.now(zone), zone))
+            },
             pinned = settings.pinnedDatabases.any { plain(it.id) == plain(pinKey(id, list)) },
             sources = list,
             sourceId = id,
