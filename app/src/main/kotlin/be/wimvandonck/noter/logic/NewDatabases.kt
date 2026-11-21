@@ -2,14 +2,15 @@ package be.wimvandonck.noter.logic
 
 /**
  * A kind of property a new database can have (#71): the ones Notion's API makes with nothing more
- * to fill in. Not status (the API can't make one), formulas, relations and rollups (they need more
- * than a name), nor buttons and IDs.
+ * to fill in (a status gets Notion's Not started, In progress and Done). Not formulas, relations
+ * and rollups (they need more than a name), nor buttons and IDs.
  */
 enum class PropertyKind(val type: String) {
     TEXT("rich_text"),
     NUMBER("number"),
     SELECT("select"),
     MULTI_SELECT("multi_select"),
+    STATUS("status"),
     DATE("date"),
     PERSON("people"),
     FILES("files"),
@@ -23,8 +24,21 @@ enum class PropertyKind(val type: String) {
     LAST_EDITED_BY("last_edited_by"),
 }
 
-/** A property of a new database: its kind and name. */
-data class NewProperty(val kind: PropertyKind, val name: String)
+/** What a new database is made from: nothing (its own properties), or one of Notion's starters. */
+enum class DatabaseStarter(val type: String?) {
+    EMPTY(null),
+    TASKS("tasks"),
+    PROJECTS("projects"),
+}
+
+/**
+ * A property of a new database: its kind, name and, for a select or multi-select, the starting
+ * options as the user typed them, separated by commas ([NewDatabases.parseOptions]).
+ */
+data class NewProperty(val kind: PropertyKind, val name: String, val options: String = "") {
+    /** Whether [options] can be typed for this kind (a status keeps Notion's own). */
+    val takesOptions: Boolean get() = kind == PropertyKind.SELECT || kind == PropertyKind.MULTI_SELECT
+}
 
 /**
  * A new database as Notion's `POST /databases` wants it (#71): a title, its title property and the
@@ -50,10 +64,20 @@ object NewDatabases {
         return generateSequence(2) { it + 1 }.map { "$base $it" }.first { it.lowercase() !in used }
     }
 
+    /** Longest option name Notion accepts. */
+    private const val MAX_OPTION_LENGTH = 100
+
+    /** The option names in [text]: split at commas, trimmed, none blank, none twice (in any case). */
+    fun parseOptions(text: String): List<String> =
+        text.split(',', '\n').map { it.trim().take(MAX_OPTION_LENGTH) }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+
     /**
      * The request for database [title] inside page [parentPageId] (null: at the top of the
-     * workspace), with title property [titleName] and [properties] in their order. A blank name
-     * becomes [fallbackNames]' name for its kind; names are made unique as in [add].
+     * workspace). With [starter] Tasks or Projects Notion builds the properties (`database_type`,
+     * which can't go with a schema), and a blank [title] leaves it to Notion to name it after the
+     * type. Otherwise it has title property [titleName] and [properties] in their order: a blank
+     * name becomes [fallbackNames]' name for its kind; names are made unique as in [add]. [inline]
+     * shows it inside the page rather than as a page of its own (only inside a page).
      */
     fun request(
         title: String,
@@ -61,21 +85,36 @@ object NewDatabases {
         titleName: String,
         properties: List<NewProperty>,
         fallbackNames: Map<PropertyKind, String> = emptyMap(),
+        starter: DatabaseStarter = DatabaseStarter.EMPTY,
+        inline: Boolean = false,
     ): Map<String, Any?> {
+        val request = linkedMapOf<String, Any?>(
+            "parent" to if (parentPageId != null) mapOf("type" to "page_id", "page_id" to parentPageId) else mapOf("type" to "workspace", "workspace" to true),
+        )
+        if (starter.type == null || title.isNotBlank()) {
+            request["title"] = listOf(mapOf("type" to "text", "text" to mapOf("content" to title.trim())))
+        }
+        if (inline && parentPageId != null) request["is_inline"] = true
+        if (starter.type != null) {
+            request["database_type"] = starter.type
+            return request
+        }
         val titleProperty = titleName.trim().ifBlank { "Name" }
         val schema = linkedMapOf<String, Any?>(titleProperty to mapOf("title" to emptyMap<String, Any?>()))
         properties.forEach { property ->
             val wanted = property.name.trim().ifBlank { fallbackNames[property.kind].orEmpty().ifBlank { property.kind.type } }
-            schema[uniqueName(wanted, schema.keys.toList())] = mapOf(property.kind.type to config(property.kind))
+            val options = if (property.takesOptions) parseOptions(property.options) else emptyList()
+            schema[uniqueName(wanted, schema.keys.toList())] = mapOf(property.kind.type to config(property.kind, options))
         }
-        return mapOf(
-            "parent" to if (parentPageId != null) mapOf("type" to "page_id", "page_id" to parentPageId) else mapOf("type" to "workspace", "workspace" to true),
-            "title" to listOf(mapOf("type" to "text", "text" to mapOf("content" to title.trim()))),
-            "initial_data_source" to mapOf("properties" to schema),
-        )
+        request["initial_data_source"] = mapOf("properties" to schema)
+        return request
     }
 
-    /** What Notion needs to know about a new property of [kind]: nothing, but a number's format. */
-    fun config(kind: PropertyKind): Map<String, Any?> =
-        if (kind == PropertyKind.NUMBER) mapOf("format" to "number") else emptyMap()
+    /** What Notion needs to know about a new property of [kind]: nothing, but a number's format and the [options] of a select. */
+    fun config(kind: PropertyKind, options: List<String> = emptyList()): Map<String, Any?> = when {
+        kind == PropertyKind.NUMBER -> mapOf("format" to "number")
+        options.isNotEmpty() && (kind == PropertyKind.SELECT || kind == PropertyKind.MULTI_SELECT) ->
+            mapOf("options" to options.map { mapOf("name" to it) })
+        else -> emptyMap()
+    }
 }

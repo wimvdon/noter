@@ -45,4 +45,55 @@ class NewDatabasesTest {
     fun `a new database starts with Tags, as in Notion`() {
         assertEquals(listOf(PropertyKind.MULTI_SELECT), NewDatabases.DEFAULT_KINDS)
     }
+
+    @Test
+    fun `status is sent empty so Notion adds Not started, In progress and Done`() {
+        val request = NewDatabases.request("Work", "p", "Name", listOf(NewProperty(PropertyKind.STATUS, "Status", "ignored, typed before switching")))
+        assertEquals(mapOf("status" to emptyMap<String, Any?>()), schema(request)["Status"])
+    }
+
+    @Test
+    fun `typed options go to a select and a multi-select, trimmed and once each`() {
+        val properties = listOf(
+            NewProperty(PropertyKind.SELECT, "Kind", " Red, green ,,RED,Blue "),
+            NewProperty(PropertyKind.MULTI_SELECT, "Tags", "a"),
+            NewProperty(PropertyKind.SELECT, "Empty", " , "),
+        )
+        val schema = schema(NewDatabases.request("Books", "p", "Name", properties))
+        val names = listOf("Red", "green", "Blue").map { mapOf("name" to it) }
+        assertEquals(mapOf("select" to mapOf("options" to names)), schema["Kind"])
+        assertEquals(mapOf("multi_select" to mapOf("options" to listOf(mapOf("name" to "a")))), schema["Tags"])
+        assertEquals(mapOf("select" to emptyMap<String, Any?>()), schema["Empty"])
+    }
+
+    @Test
+    fun `options split at new lines too and are cut to Notion's limit`() {
+        assertEquals(listOf("a", "b"), NewDatabases.parseOptions("a\nb"))
+        assertEquals(100, NewDatabases.parseOptions("x".repeat(150)).single().length)
+    }
+
+    @Test
+    fun `a starter sends its type with no schema, and Notion names it when the name is blank`() {
+        val tasks = NewDatabases.request(" ", "p", "Name", listOf(NewProperty(PropertyKind.TEXT, "Text")), starter = DatabaseStarter.TASKS)
+        assertEquals(mapOf("parent" to mapOf("type" to "page_id", "page_id" to "p"), "database_type" to "tasks"), tasks)
+        val projects = NewDatabases.request("Q3", null, "Name", emptyList(), starter = DatabaseStarter.PROJECTS)
+        assertEquals("projects", projects["database_type"])
+        assertEquals(listOf(mapOf("type" to "text", "text" to mapOf("content" to "Q3"))), projects["title"])
+        assertEquals(false, projects.containsKey("initial_data_source"))
+    }
+
+    @Test
+    fun `an empty database always has a title and no database type`() {
+        val request = NewDatabases.request("", "p", "Name", emptyList())
+        assertEquals(true, request.containsKey("title"))
+        assertEquals(false, request.containsKey("database_type"))
+    }
+
+    @Test
+    fun `showing inside the page only applies inside a page`() {
+        assertEquals(true, NewDatabases.request("B", "p", "Name", emptyList(), inline = true)["is_inline"])
+        assertEquals(false, NewDatabases.request("B", "p", "Name", emptyList())["is_inline"] ?: false)
+        assertEquals(false, NewDatabases.request("B", null, "Name", emptyList(), inline = true).containsKey("is_inline"))
+        assertEquals(true, NewDatabases.request("", "p", "Name", emptyList(), starter = DatabaseStarter.TASKS, inline = true)["is_inline"])
+    }
 }

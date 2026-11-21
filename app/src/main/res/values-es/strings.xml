@@ -190,7 +190,7 @@
     <string name="new_database_in_page">Nueva base de datos en esta página</string>
     <string name="new_database_at_top">Nueva base de datos arriba del todo</string>
     <string name="new_database_name">Nombre de la base de datos</string>
-    <string name="new_database_properties">Sus propiedades además del nombre. Las opciones, los formatos y las vistas se ajustan en Notion.</string>
+    <string name="new_database_properties">Sus propiedades además del nombre. Los formatos y las vistas se ajustan en Notion.</string>
     <string name="new_database_tags">Etiquetas</string>
     <string name="new_database_title_property">Nombre</string>
     <string name="new_database_create">Crear</string>
@@ -198,7 +198,7 @@
     <string name="action_rename">Cambiar nombre</string>
     <string name="edit_database">Editar base de datos</string>
     <string name="action_save">Guardar</string>
-    <string name="edit_database_properties">Propiedades. Las opciones, los formatos y las vistas se ajustan en Notion.</string>
+    <string name="edit_database_properties">Propiedades. Los formatos y las vistas se ajustan en Notion.</string>
     <string name="remove_properties_title">¿Quitar propiedades?</string>
     <string name="remove_properties_body">%1$s y sus valores en cada página se eliminan en Notion.</string>
     <string name="remove_and_save">Quitar y guardar</string>
@@ -228,6 +228,13 @@
     <string name="new_database_add_property">Añadir propiedad</string>
     <string name="new_database_remove_property">Quitar %1$s</string>
     <string name="new_database_created">Base de datos creada. Ábrela en Notion para editar sus vistas.</string>
+    <string name="new_database_starter_empty">Vacía</string>
+    <string name="new_database_starter_tasks">Tareas</string>
+    <string name="new_database_starter_projects">Proyectos</string>
+    <string name="new_database_starter_hint">Notion añade las propiedades por sí mismo, como el estado y las fechas.</string>
+    <string name="new_database_options">Opciones</string>
+    <string name="new_database_options_hint">Sepáralas con comas</string>
+    <string name="new_database_inline">Mostrar dentro de la página</string>
     <string name="action_hide_on_home">Ocultar</string>
     <string name="hide_on_home_title">¿Ocultar «%1$s»?</string>
     <string name="hide_on_home_body">Ya no aparecerá en Bases de datos y páginas. La búsqueda lo sigue encontrando, y puedes volver a mostrarlo en Ajustes.</string>

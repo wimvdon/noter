@@ -258,9 +258,9 @@ app apart from their package (and `R` import) lines. Copy a change to the other 
   Pin or Unpin and Hide; Hide asks first (a dialog: "Hide “name”?", Cancel and Hide) and the row
   leaves the list (Search still finds it). Settings then has a section listing what is hidden, each
   with a Show text button. One FAB (+): a sheet with "New page" (at the top of the workspace), "New database at
-  the top" and "New note in" with the databases. New database is a dialog: a name field, then a
-  name field per property (its kind as the label, × to remove) and Add property with a menu of
-  kinds; a toast after it opens. With tokens for several workspaces, "Databases and pages" becomes one
+  the top" and "New note in" with the databases. New database is a dialog: a name field, a segmented button (Empty, Tasks, Projects), then for Empty a
+  name field per property (its kind as the label, × to remove; an Options field under a select) and Add property with a menu of
+  kinds, inside a page a "Show inside the page" switch; a toast after it opens. With tokens for several workspaces, "Databases and pages" becomes one
   part per workspace under its name (Title Small, primary, a chevron; a tap folds it away), rows
   say "Workspace · Edited …", and the + sheet has a part per workspace (its name as the title, with
   a chevron that folds the part away,

@@ -90,12 +90,19 @@ properties and content: the pages of databases and pages on their own.
   page with subpages opens, their titles are asked again (one request, `logic/SubpageTitles.kt`).
 - **New database** (#71, `logic/NewDatabases.kt`, `ui/common/NewDatabase.kt`): in a page (its ⋮
   menu) or at the top of a workspace (+, where a page at the top is offered). A dialog asks for a
-  name and its properties besides Name: Tags at first, as in Notion; Add property adds any kind
-  Notion's API makes with only a name (`PropertyKind`: not status, formulas, relations, rollups),
-  named as Notion names a new one of that kind and numbered when taken ("Text 2"). `POST
-  /databases` makes it with its first data source; it opens at once, with a toast saying that its
-  views are edited in Notion. Unlike notes it isn't queued: it needs Notion, and the dialog shows the error when
-  Notion can't be reached or refuses.
+  name and what to start from (`DatabaseStarter`, a segmented button: Empty, Tasks, Projects).
+  Empty has Name and its properties: Tags at first, as in Notion; Add property adds any kind
+  Notion's API makes with only a name (`PropertyKind`: not formulas, relations, rollups), named as
+  Notion names a new one of that kind and numbered when taken ("Text 2"). A select or multi-select
+  has an Options field (comma-separated, `NewDatabases.parseOptions`, sent as `options`); a status
+  always gets Notion's Not started, In progress and Done (custom status options and groups aren't
+  sent: the add-property menu of Edit database leaves status out too, since only create is
+  checked). Tasks and Projects send `database_type` instead of a schema (Notion builds the
+  properties; the two can't go together), and a blank name leaves the naming to Notion. Inside a
+  page a switch "Show inside the page" sends `is_inline: true`; off, the database is a page of its
+  own. `POST /databases` makes it with its first data source; it opens at once, with a toast saying
+  that its views are edited in Notion. Unlike notes it isn't queued: it needs Notion, and the dialog
+  shows the error when Notion can't be reached or refuses.
 - **Search** (`SearchScreen.kt`, a child page from Home's search bar, sharing Home's ViewModel): one
   list (#60) of the notes on this phone whose title has every word typed (`logic/NoteSearch.kt`,
   at once and offline) and the databases and pages Notion's search finds, each page once, best

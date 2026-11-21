@@ -545,3 +545,7 @@ Without a `LICENSE` file the legal default is already all rights reserved, but t
 - **No lint baseline:** the template has zero lint issues.
 - **Play Store upload** is prepared but commented out in `release.yml` until a Play Console app and
   service account exist.
+
+## 2026-11-21: More to choose when making a database
+
+Notion's API now makes a status property, starting options for selects, and Tasks and Projects databases (`database_type`). New database offers Empty, Tasks or Projects at the top; Tasks and Projects hide the property list because Notion builds it. Select and multi-select get an Options field (comma-separated). Status is added with Notion's three default options: custom status options need groups that the app can't show in a small dialog, so they stay in Notion. Inside a page a switch can show the database in the page (`is_inline`). Edit database still doesn't offer status, because adding one there isn't checked. Rejected: a full option editor with colours.
