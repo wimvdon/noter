@@ -2,6 +2,7 @@ package be.wimvandonck.noter.logic
 
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
+import be.wimvandonck.noter.data.notion.InlineTokens
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -40,5 +41,12 @@ class ReadingTextTest {
         )
         assertEquals(listOf("val x = **y**", "Small"), lines.map { it.text })
         assertEquals(listOf(ReadingStyle.CODE, ReadingStyle.HEADING_3), lines.map { it.style })
+    }
+
+    @Test
+    fun `mentions read as their text`() {
+        val mention = InlineTokens.atom("""{"type":"mention","mention":{"type":"user","user":{"id":"u1"}}}""", "@Wim")
+        val line = ReadingText.lines(listOf(be.wimvandonck.noter.data.model.Block("a", text = "Ask $mention"))).single()
+        assertEquals("Ask @Wim", line.text)
     }
 }

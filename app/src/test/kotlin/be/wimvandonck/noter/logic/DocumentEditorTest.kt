@@ -2,6 +2,7 @@ package be.wimvandonck.noter.logic
 
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
+import be.wimvandonck.noter.data.notion.InlineTokens
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -262,5 +263,29 @@ class DocumentEditorTest {
             n("d", 0, BlockType.NUMBERED), n("e", 1, BlockType.NUMBERED),
         )
         assertEquals(mapOf("a" to 1, "b" to 1, "c" to 2, "d" to 2, "e" to 1), DocumentEditor.numbers(blocks))
+    }
+
+    private val mention = InlineTokens.atom("""{"type":"mention","mention":{"type":"user","user":{"id":"u1"}}}""", "@Wim")
+    private val red = InlineTokens.spanOpen("red", underline = false)
+    private val close = InlineTokens.SPAN_CLOSE
+
+    @Test
+    fun `enter in coloured text keeps the colour on both lines and the mention whole`() {
+        val result = editor.changeText(listOf(b("a", "${red}ab\ncd$close $mention")), "a", "${red}ab\ncd$close $mention", 3)
+        assertEquals(listOf("${red}ab$close", "${red}cd$close $mention"), result.blocks.map { it.text })
+    }
+
+    @Test
+    fun `joining lines puts the cursor after the shown text`() {
+        val result = editor.backspaceAtStart(listOf(b("a", "Ask $mention"), b("b", " now")), "b")
+        assertEquals("Ask $mention now", result.blocks.single().text)
+        // "Ask @Wim" is 8 characters on screen.
+        assertEquals(8, result.cursor)
+    }
+
+    @Test
+    fun `joining two lines of the same colour gives one coloured piece`() {
+        val result = editor.backspaceAtStart(listOf(b("a", "${red}ab$close"), b("b", "${red}cd$close")), "b")
+        assertEquals("${red}abcd$close", result.blocks.single().text)
     }
 }

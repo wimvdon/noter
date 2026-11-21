@@ -15,12 +15,35 @@ import androidx.compose.ui.text.style.TextDecoration
  * Shows inline Markdown while typing: the text between `**`, `*`, `~~` and `` ` `` gets its
  * style and the markers are dimmed. The text itself is unchanged (the markers stay visible and
  * editable), so cursor positions need no mapping.
+ *
+ * [mentions] are where the shown text has mentions (see InlineTokens.Layout): they get the link
+ * colour, and Markdown markers in their text don't count. [markdown] false styles only those.
  */
-class MarkdownStyling(private val markerColor: Color, private val linkColor: Color) : VisualTransformation {
+class MarkdownStyling(
+    private val markerColor: Color,
+    private val linkColor: Color,
+    private val mentions: List<IntRange> = emptyList(),
+    private val markdown: Boolean = true,
+) : VisualTransformation {
+    fun withMentions(ranges: List<IntRange>): MarkdownStyling = MarkdownStyling(markerColor, linkColor, ranges, markdown)
+
     override fun filter(text: AnnotatedString): TransformedText {
-        val raw = text.text
-        if (raw.none { it == '*' || it == '~' || it == '`' || it == '[' }) return TransformedText(text, OffsetMapping.Identity)
+        val shown = text.text
+        val hasMarkers = markdown && shown.any { it == '*' || it == '~' || it == '`' || it == '[' }
+        if (!hasMarkers && mentions.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
         val builder = AnnotatedString.Builder(text)
+        // The ranges come from the stored text, which can be a keystroke behind the field.
+        val inText = mentions.filter { !it.isEmpty() && it.first >= 0 && it.last < shown.length }
+        inText.forEach { builder.addStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.Medium), it.first, it.last + 1) }
+        if (!hasMarkers) return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+        // A mention's text is matched as plain letters, so a star in it never starts bold or italic.
+        val raw = if (inText.isEmpty()) {
+            shown
+        } else {
+            val chars = shown.toCharArray()
+            inText.forEach { range -> range.forEach { chars[it] = 'x' } }
+            String(chars)
+        }
         val marker = SpanStyle(color = markerColor)
         fun style(regex: Regex, open: Int, close: Int, span: SpanStyle) {
             regex.findAll(raw).forEach { match ->
@@ -45,9 +68,10 @@ class MarkdownStyling(private val markerColor: Color, private val linkColor: Col
     }
 
     override fun equals(other: Any?): Boolean =
-        other is MarkdownStyling && other.markerColor == markerColor && other.linkColor == linkColor
+        other is MarkdownStyling && other.markerColor == markerColor && other.linkColor == linkColor &&
+            other.mentions == mentions && other.markdown == markdown
 
-    override fun hashCode(): Int = markerColor.hashCode() * 31 + linkColor.hashCode()
+    override fun hashCode(): Int = ((markerColor.hashCode() * 31 + linkColor.hashCode()) * 31 + mentions.hashCode()) * 31 + markdown.hashCode()
 
     private companion object {
         val BOLD = Regex("""\*\*(?=\S)(.+?)\*\*""")

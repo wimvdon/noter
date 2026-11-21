@@ -147,4 +147,32 @@ class BlockCodecTest {
         // Nothing shared: one try, with nothing.
         assertEquals(listOf(emptyList<Map<String, Any?>>()), BlockCodec.createAttempts(emptyList()))
     }
+
+    @Test
+    fun `a line with a mention is written back with the mention`() {
+        val block = parse(
+            """{"id":"b","type":"paragraph","paragraph":{"rich_text":[
+                {"type":"text","plain_text":"Call ","text":{"content":"Call "}},
+                {"type":"mention","plain_text":"@Wim","mention":{"type":"user","user":{"object":"user","id":"u1"}}}]}}""",
+        )!!
+        assertEquals("Call @Wim", InlineTokens.display(block.text))
+        @Suppress("UNCHECKED_CAST")
+        val richText = (BlockCodec.toUpdateRequest(block)["paragraph"] as Map<String, Any?>)["rich_text"] as List<Any?>
+        assertEquals(2, richText.size)
+        assertEquals(Json.parseToJsonElement("""{"type":"mention","mention":{"type":"user","user":{"id":"u1"}}}"""), richText[1])
+    }
+
+    @Test
+    fun `code blocks keep their text exactly and never hold mentions`() {
+        val block = parse(
+            """{"id":"b","type":"code","code":{"language":"kotlin","rich_text":[
+                {"type":"text","plain_text":"a *b*","text":{"content":"a *b*"}},
+                {"type":"mention","plain_text":"@Wim","mention":{"type":"user","user":{"id":"u1"}}}]}}""",
+        )!!
+        assertEquals("a *b*@Wim", block.text)
+        assertEquals(
+            listOf(mapOf("type" to "text", "text" to mapOf("content" to "a *b*@Wim"))),
+            (BlockCodec.toUpdateRequest(block)["code"] as Map<*, *>)["rich_text"],
+        )
+    }
 }

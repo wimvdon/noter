@@ -2,6 +2,17 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Mentions, equations and colours survive an edit
+
+Editing a line used to write its mentions and inline equations back as plain text, and drop its
+colour and underline, so Notion lost them. They are now kept in the line's stored text with
+private-use characters (`data/notion/InlineTokens.kt`): a mention is shown as its text, can only
+be deleted whole and is sent back as the same rich text item; colour and underline are a span
+around their text. Rejected: a separate table on the block (it would have to follow every split,
+join and diff) and hiding the stored parts with the text field's visual transformation (the
+keyboard would still see them and could put the cursor inside). Link preview mentions can't be
+written by Notion's API, so they stay links.
+
 ## 2026-11-21: Cards and the order of a note's properties follow the Notion view
 
 Until now the cards showed nothing but the content unless the owner chose properties in the view

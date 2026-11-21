@@ -56,7 +56,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -67,6 +69,7 @@ import be.wimvandonck.noter.data.model.PageRef
 import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.model.SelectOption
+import be.wimvandonck.noter.data.notion.InlineTokens
 import be.wimvandonck.noter.data.notion.PropertyCodec
 import be.wimvandonck.noter.logic.ChoiceOrder
 import be.wimvandonck.noter.logic.NewOptions
@@ -210,14 +213,27 @@ private fun InlineTextField(
     singleLine: Boolean,
     onChange: (String) -> Unit,
 ) {
-    var text by remember { mutableStateOf(value) }
+    // [stored] keeps a text's mentions (see InlineTokens); the field shows [text].
+    var stored by remember { mutableStateOf(value) }
+    var text by remember { mutableStateOf(TextFieldValue(InlineTokens.display(value))) }
     var focused by remember { mutableStateOf(false) }
-    LaunchedEffect(value) { if (!focused && value != text) text = value }
+    LaunchedEffect(value) {
+        if (!focused && value != stored) {
+            stored = value
+            text = TextFieldValue(InlineTokens.display(value))
+        }
+    }
     BasicTextField(
         value = text,
-        onValueChange = {
-            text = it
-            onChange(it)
+        onValueChange = { new ->
+            if (new.text == text.text) {
+                text = new
+                return@BasicTextField
+            }
+            val edit = InlineTokens.edit(stored, new.text, new.selection.start)
+            stored = edit.stored
+            text = if (edit.display == new.text) new else TextFieldValue(edit.display, TextRange(edit.cursor))
+            onChange(edit.stored)
         },
         singleLine = singleLine,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
@@ -228,7 +244,7 @@ private fun InlineTextField(
             .padding(vertical = 8.dp)
             .onFocusChanged { focused = it.isFocused },
         decorationBox = { inner ->
-            if (text.isEmpty()) {
+            if (text.text.isEmpty()) {
                 Text(stringResource(R.string.property_empty), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.outline)
             }
             inner()

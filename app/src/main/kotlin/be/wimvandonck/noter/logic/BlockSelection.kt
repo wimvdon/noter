@@ -2,6 +2,8 @@ package be.wimvandonck.noter.logic
 
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
+import be.wimvandonck.noter.data.notion.InlineMarkdown
+import be.wimvandonck.noter.data.notion.InlineTokens
 
 /**
  * Selecting several lines of a note at once (to copy or delete them): each block is its own text
@@ -19,12 +21,14 @@ object BlockSelection {
 
     /**
      * The selected lines, in the order of the note, as Markdown text to copy: headings with #,
-     * lists with their marker, to-dos with a box, quotes with >, nested lines indented.
+     * lists with their marker, to-dos with a box, quotes with >, nested lines indented. Mentions
+     * are copied as their text.
      */
     fun asText(blocks: List<Block>, selected: Set<String>): String {
         val numbers = DocumentEditor.numbers(blocks)
         return blocks.filter { it.key in selected }.joinToString("\n") { block ->
-            val text = block.text
+            // Mentions as their text and no colours: the copy is plain Markdown.
+            val text = if (block.type == BlockType.CODE) InlineTokens.display(block.text) else InlineMarkdown.portable(block.text)
             val line = when (block.type) {
                 BlockType.HEADING_1 -> "# $text"
                 BlockType.HEADING_2 -> "## $text"

@@ -2,6 +2,8 @@ package be.wimvandonck.noter.logic
 
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.BlockType
+import be.wimvandonck.noter.data.notion.InlineMarkdown
+import be.wimvandonck.noter.data.notion.InlineTokens
 import java.util.UUID
 
 /** The content after an edit, and where the cursor goes. */
@@ -32,7 +34,10 @@ class DocumentEditor(private val newKey: () -> String = { UUID.randomUUID().toSt
     fun newBlock(type: BlockType = BlockType.PARAGRAPH, text: String = ""): Block =
         Block(key = newKey(), type = type, text = text)
 
-    /** The user typed in block [key]; [newText] is the field's whole text, [cursor] where the cursor is. */
+    /**
+     * The user typed in block [key]; [newText] is the block's whole stored text (see InlineTokens),
+     * [cursor] where the cursor is in the text the field shows.
+     */
     fun changeText(blocks: List<Block>, key: String, newText: String, cursor: Int = newText.length): EditResult {
         val index = blocks.indexOfFirst { it.key == key }
         if (index < 0) return EditResult(blocks)
@@ -50,7 +55,7 @@ class DocumentEditor(private val newKey: () -> String = { UUID.randomUUID().toSt
             val (type, checked, prefixLength) = shortcut
             val text = newText.substring(prefixLength)
             val updated = block.copy(type = type, checked = checked, text = text)
-            return EditResult(blocks.replace(index, updated), key, (cursor - prefixLength).coerceIn(0, text.length))
+            return EditResult(blocks.replace(index, updated), key, (cursor - prefixLength).coerceIn(0, InlineTokens.displayLength(text)))
         }
         return EditResult(blocks.replace(index, block.copy(text = newText)), key, cursor)
     }
@@ -63,7 +68,8 @@ class DocumentEditor(private val newKey: () -> String = { UUID.randomUUID().toSt
             if (block.depth > 0 && canOutdent(blocks, block.key)) return outdent(blocks, block.key)
             return EditResult(blocks.replace(index, block.copy(type = BlockType.PARAGRAPH, checked = false, toggleable = false)), block.key, 0)
         }
-        val lines = newText.split('\n')
+        // Each line keeps the colours it is in (see InlineTokens).
+        val lines = InlineTokens.splitLines(newText)
         val first = block.copy(text = lines.first())
         // A block with nested blocks gets the new lines as its first nested blocks, as in Notion.
         val nextType = if (kids) continuationType(block.type).takeIf { it.isListItem } ?: BlockType.PARAGRAPH else continuationType(block.type)
@@ -75,7 +81,7 @@ class DocumentEditor(private val newKey: () -> String = { UUID.randomUUID().toSt
         }
         // The cursor goes to the start of the text that moved down (Enter in the middle of a line).
         val last = added.last()
-        return EditResult(result, last.key, if (added.size == 1) 0 else last.text.length)
+        return EditResult(result, last.key, if (added.size == 1) 0 else InlineTokens.displayLength(last.text))
     }
 
     /** What a new line after a block of [type] becomes. */
@@ -103,12 +109,12 @@ class DocumentEditor(private val newKey: () -> String = { UUID.randomUUID().toSt
             // Can't join into an image or table; only remove this line when it is empty.
             return if (block.text.isEmpty()) EditResult(blocks.removeAtIndex(index), null) else EditResult(blocks, key, 0)
         }
-        val joined = previous.copy(text = previous.text + block.text)
+        val joined = previous.copy(text = InlineTokens.normalize(previous.text + block.text))
         val result = blocks.toMutableList().apply {
             set(previousIndex, joined)
             removeAt(index)
         }
-        return EditResult(result, previous.key, previous.text.length)
+        return EditResult(result, previous.key, InlineTokens.displayLength(previous.text))
     }
 
     fun setType(blocks: List<Block>, key: String, type: BlockType): EditResult {
@@ -330,7 +336,7 @@ class DocumentEditor(private val newKey: () -> String = { UUID.randomUUID().toSt
                 .filter { it.type.hasText && it.text.isNotBlank() }
                 .take(maxLines)
                 .joinToString("\n") { block ->
-                    val text = if (block.type == BlockType.CODE) block.text else be.wimvandonck.noter.data.notion.InlineMarkdown.stripped(block.text)
+                    val text = if (block.type == BlockType.CODE) InlineTokens.display(block.text) else InlineMarkdown.stripped(block.text)
                     when (block.type) {
                         BlockType.TODO -> (if (block.checked) "☑ " else "☐ ") + text
                         BlockType.BULLETED -> "• $text"
