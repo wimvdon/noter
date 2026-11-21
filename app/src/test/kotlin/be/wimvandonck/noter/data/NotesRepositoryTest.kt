@@ -950,7 +950,7 @@ class NotesRepositoryTest {
                 sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list()
                 sent.path.startsWith("/data_sources/other/query") -> 200 to FakeNotion.list()
                 sent.path.startsWith("/data_sources/other") -> 200 to FakeNotion.database("other")
-                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list(
+                sent.method == "POST" && sent.path.startsWith("/search") -> 200 to FakeNotion.list(
                     """{"object":"page","id":"page-1","parent":{"type":"workspace","workspace":true},"properties":{"title":{"id":"title","type":"title","title":[{"plain_text":"List"}]}}}""",
                 )
                 sent.method == "POST" && sent.path == "/pages/page-1/move" -> 200 to "{}"
@@ -993,7 +993,7 @@ class NotesRepositoryTest {
     fun `a database moved to a page or the top is sent as its new parent, and Home's tree follows`() = runBlocking {
         notion.respond = { sent ->
             when {
-                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list(
+                sent.method == "POST" && sent.path.startsWith("/search") -> 200 to FakeNotion.list(
                     """{"object":"data_source","id":"ds-1","title":[{"plain_text":"Tasks"}],"parent":{"type":"database_id","database_id":"db-1"}}""",
                 )
                 sent.path == "/databases/db-1" && sent.method == "GET" ->
