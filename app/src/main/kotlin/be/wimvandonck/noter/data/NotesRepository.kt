@@ -18,6 +18,8 @@ import be.wimvandonck.noter.logic.NoteTemplates
 import be.wimvandonck.noter.logic.TemplatePick
 import be.wimvandonck.noter.data.model.NoteSummary
 import be.wimvandonck.noter.data.model.NotionUser
+import be.wimvandonck.noter.data.model.Comment
+import be.wimvandonck.noter.data.notion.CommentCodec
 import be.wimvandonck.noter.data.model.DatabaseSetup
 import be.wimvandonck.noter.data.model.PinnedDatabase
 import be.wimvandonck.noter.data.model.PageContent
@@ -1892,6 +1894,44 @@ class NotesRepository(
         val databaseId = findNote(_databases.value, resolve(pageId))?.databaseId ?: return
         if (databaseId == PAGES || isPageNotebook(databaseId)) return
         openViews(databaseId)
+    }
+
+    // ---- Comments (online only: read when the sheet opens, kept in memory while the app runs) ----
+
+    private val commentsCache = java.util.concurrent.ConcurrentHashMap<String, List<Comment>>()
+
+    /** The comments fetched for [pageId] earlier in this run, if any. */
+    fun cachedComments(pageId: String): List<Comment>? = commentsCache[resolve(pageId)]
+
+    /** Downloads the page's comments (throws [NotionException]; a 403 means the connection lacks "Read comments"). */
+    suspend fun comments(pageId: String): List<Comment> = withContext(Dispatchers.IO) {
+        val id = resolve(pageId)
+        client.comments(id).mapNotNull(CommentCodec::parse).also { commentsCache[id] = it }
+    }
+
+    /** Adds a comment to the page, or (with [discussionId]) to one of its discussions. */
+    suspend fun addComment(pageId: String, markdown: String, discussionId: String? = null): Comment = withContext(Dispatchers.IO) {
+        val id = resolve(pageId)
+        val added = client.addComment(id, CommentCodec.addBody(id, discussionId, markdown))
+        val comment = CommentCodec.parse(added) ?: throw NotionException("Notion answered with an unreadable comment")
+        commentsCache[id] = commentsCache[id].orEmpty() + comment
+        comment
+    }
+
+    /** Replaces the text of the comment (only the integration's own can be changed). */
+    suspend fun editComment(pageId: String, comment: Comment, markdown: String): Comment = withContext(Dispatchers.IO) {
+        val id = resolve(pageId)
+        val saved = client.updateComment(id, comment.id, CommentCodec.editBody(markdown))
+        val updated = CommentCodec.parse(saved)?.let { it.copy(blockId = it.blockId ?: comment.blockId) } ?: comment.copy(text = markdown)
+        commentsCache[id] = commentsCache[id].orEmpty().map { if (it.id == comment.id) updated else it }
+        updated
+    }
+
+    /** Deletes the comment (only the integration's own can be). */
+    suspend fun deleteComment(pageId: String, comment: Comment) = withContext(Dispatchers.IO) {
+        val id = resolve(pageId)
+        client.deleteComment(id, comment.id)
+        commentsCache[id] = commentsCache[id].orEmpty().filterNot { it.id == comment.id }
     }
 
     /** What kind of token [key] (the stored one when null) is, and who it acts as. */

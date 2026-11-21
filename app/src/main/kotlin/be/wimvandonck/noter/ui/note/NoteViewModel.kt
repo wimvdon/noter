@@ -11,7 +11,12 @@ import be.wimvandonck.noter.ui.common.DatabaseCreation
 import be.wimvandonck.noter.data.model.Block
 import be.wimvandonck.noter.data.model.CustomEmoji
 import be.wimvandonck.noter.data.model.BlockType
+import be.wimvandonck.noter.data.model.Comment
 import be.wimvandonck.noter.data.model.DatabaseSchema
+import be.wimvandonck.noter.data.model.Discussion
+import be.wimvandonck.noter.data.api.NotionErrors
+import be.wimvandonck.noter.data.api.NotionException
+import be.wimvandonck.noter.logic.CommentThreads
 import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.NoteSummary
 import be.wimvandonck.noter.data.model.NotionUser
@@ -80,6 +85,23 @@ data class NoteUiState(
 ) {
     /** The content can be edited: not while the note's full content is still on its way. */
     val editable: Boolean get() = nested != NestedContent.State.LOADING
+}
+
+/** The comments sheet (see [NoteViewModel.openComments]). */
+data class CommentsUi(
+    val open: Boolean = false,
+    val loading: Boolean = false,
+    /** What went wrong reading the comments (see NotionErrors), shown instead of the list. */
+    val loadError: String? = null,
+    /** What went wrong sending, changing or deleting one, shown next to the text field. */
+    val sendError: String? = null,
+    val sending: Boolean = false,
+    val comments: List<Comment> = emptyList(),
+    /** The IDs the token's own comments have as author (empty until known). */
+    val mine: List<String> = emptyList(),
+    val users: List<NotionUser> = emptyList(),
+) {
+    val discussions: List<Discussion> get() = CommentThreads.group(comments)
 }
 
 class NoteViewModel(
@@ -444,6 +466,77 @@ class NoteViewModel(
         pendingProperties.clear()
         repository.trashNote(pageId)
         onDone()
+    }
+
+    // ---- Comments: online only, read when the sheet opens ----
+
+    private val _comments = MutableStateFlow(CommentsUi(comments = repository.cachedComments(pageId).orEmpty()))
+    val comments: StateFlow<CommentsUi> = _comments.asStateFlow()
+    private var commentsPrefetched = false
+
+    /** Reads the comments quietly when the note opens, so the app bar can show how many there are. */
+    fun prefetchComments() {
+        if (commentsPrefetched) return
+        commentsPrefetched = true
+        viewModelScope.launch {
+            runCatching { repository.comments(pageId) }.onSuccess { list -> _comments.update { it.copy(comments = list) } }
+        }
+    }
+
+    fun openComments() {
+        _comments.update { it.copy(open = true, sendError = null) }
+        loadComments()
+        viewModelScope.launch {
+            val people = repository.users()
+            _comments.update { it.copy(users = people) }
+        }
+        viewModelScope.launch {
+            if (_comments.value.mine.isEmpty()) {
+                val id = runCatching { repository.tokenInfo().id }.getOrDefault("")
+                if (id.isNotEmpty()) _comments.update { it.copy(mine = listOf(id)) }
+            }
+        }
+    }
+
+    fun closeComments() = _comments.update { it.copy(open = false, loadError = null, sendError = null) }
+
+    fun loadComments() {
+        _comments.update { it.copy(loading = true, loadError = null) }
+        viewModelScope.launch {
+            try {
+                val list = repository.comments(pageId)
+                _comments.update { it.copy(comments = list, loading = false) }
+            } catch (e: NotionException) {
+                _comments.update { it.copy(loading = false, loadError = NotionErrors.ofComments(e)) }
+            }
+        }
+    }
+
+    /** Adds [text] as a comment on the page, or as a reply in [discussionId]; [onDone] when Notion took it. */
+    fun sendComment(text: String, discussionId: String?, onDone: () -> Unit) {
+        val markdown = CommentThreads.sendable(text) ?: return
+        changeComments(onDone) { repository.addComment(pageId, markdown, discussionId) }
+    }
+
+    fun editComment(comment: Comment, text: String, onDone: () -> Unit) {
+        val markdown = CommentThreads.sendable(text) ?: return
+        changeComments(onDone) { repository.editComment(pageId, comment, markdown) }
+    }
+
+    fun deleteComment(comment: Comment) = changeComments(onDone = {}) { repository.deleteComment(pageId, comment) }
+
+    private fun changeComments(onDone: () -> Unit, action: suspend () -> Unit) {
+        if (_comments.value.sending) return
+        _comments.update { it.copy(sending = true, sendError = null) }
+        viewModelScope.launch {
+            try {
+                action()
+                _comments.update { it.copy(comments = repository.cachedComments(pageId).orEmpty(), sending = false) }
+                onDone()
+            } catch (e: NotionException) {
+                _comments.update { it.copy(sending = false, sendError = NotionErrors.ofComments(e)) }
+            }
+        }
     }
 
     fun loadUsers() {

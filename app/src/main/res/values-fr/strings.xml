@@ -295,6 +295,21 @@
     <string name="view_settings">Réglages des vues</string>
     <string name="edit_views_in_notion">Modifier les vues dans Notion</string>
     <string name="more_in_notion">Plus d’options dans Notion</string>
+    <string name="comments">Commentaires</string>
+    <string name="comments_empty">Pas encore de commentaires.</string>
+    <string name="comments_add_hint">Ajouter un commentaire</string>
+    <string name="comments_reply_to">Réponse à %1$s</string>
+    <string name="comment_reply">Répondre</string>
+    <string name="comment_edit">Modifier</string>
+    <string name="comment_delete">Supprimer</string>
+    <string name="comment_send">Envoyer</string>
+    <string name="comment_save">Enregistrer</string>
+    <string name="comment_editing">Modification de votre commentaire</string>
+    <string name="comment_delete_title">Supprimer ce commentaire ?</string>
+    <string name="comment_delete_body">Il est aussi supprimé dans Notion.</string>
+    <string name="comment_someone">Quelqu’un</string>
+    <string name="comments_retry">Réessayer</string>
+    <string name="error_comments_forbidden">Notion ne laisse pas encore Noter lire les commentaires de cet espace de travail. Dans le portail développeur de Notion, activez les capacités « Read comments » et « Insert comments » de la connexion.</string>
     <!-- Trash (undo and the Trash list) -->
     <string name="trash_moved">Mis à la corbeille</string>
     <string name="section_trash">Notes et pages</string>

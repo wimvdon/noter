@@ -35,6 +35,10 @@ What the app sends and stores: [`PRIVACY.md`](PRIVACY.md). Rules for Claude Code
      expiry date), copy it and paste it in the app.
    - **Advanced › Connection token**: for a workspace you're a guest in. A member makes a connection, shares
      pages and databases with it and gives you its token.
+   Comments in a note (the speech-bubble icon in its bar) need the
+   connection's **Read comments** and **Insert comments** capabilities. A connection you made yourself has them under the integration's *Capabilities* at
+   <https://www.notion.so/profile/integrations>. For **Connect to Notion** (the public connection) the owner
+   turns both on once in Notion's developer portal; until then Noter says Notion doesn't let it read comments.
 3. **Home** lists your databases and pages; open a database and pin it with **⋮ › Pin** to keep it
    at the top of Home. Add as many workspaces as you like, each its own way. Each workspace is added
 once: adding it again replaces how it is connected, but never a personal access token by a way

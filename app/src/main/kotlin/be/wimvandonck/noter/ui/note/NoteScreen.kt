@@ -49,7 +49,10 @@ import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material.icons.rounded.KeyboardHide
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -192,6 +195,8 @@ fun NoteScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val customEmojis by viewModel.customEmojis.collectAsStateWithLifecycle()
     val focus by viewModel.focus.collectAsStateWithLifecycle()
+    val commentsUi by viewModel.comments.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) { viewModel.prefetchComments() }
     var focusedKey by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
@@ -346,6 +351,17 @@ fun NoteScreen(
             onDismiss = viewModel.move::dismiss,
         )
     }
+    if (commentsUi.open) {
+        CommentsSheet(
+            ui = commentsUi,
+            blocks = state.blocks,
+            onDismiss = viewModel::closeComments,
+            onRetry = viewModel::loadComments,
+            onSend = viewModel::sendComment,
+            onEdit = viewModel::editComment,
+            onDelete = viewModel::deleteComment,
+        )
+    }
 
     quickActionsFor?.let { databaseId ->
         NoteQuickActions(databaseId, snackbar, noteScope, onDismiss = { quickActionsFor = null })
@@ -420,6 +436,21 @@ fun NoteScreen(
                 actions = {
                     if (note != null) {
                         SyncButton(state.pendingCount, state.offline, state.syncing, onSync = viewModel::sync)
+                        IconButton(onClick = viewModel::openComments) {
+                            BadgedBox(
+                                badge = {
+                                    if (commentsUi.comments.isNotEmpty()) {
+                                        Badge { Text(commentsUi.comments.size.coerceAtMost(99).toString()) }
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Outlined.ChatBubbleOutline,
+                                    contentDescription = stringResource(R.string.comments),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         IconButton(onClick = { viewModel.togglePin() }) {
                             Icon(
                                 if (state.pinned) Icons.Rounded.PushPin else Icons.Outlined.PushPin,
