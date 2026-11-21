@@ -15,6 +15,7 @@ import be.wimvandonck.noter.data.model.PropertySchema
 import be.wimvandonck.noter.data.model.PageTemplate
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.model.SelectOption
+import be.wimvandonck.noter.data.model.StatusGroup
 import kotlinx.serialization.json.JsonObject
 
 /** Reads Notion's database and page JSON into the app's models, and writes property values back. */
@@ -35,6 +36,7 @@ object PropertyCodec {
                 relationDatabaseId = if (type == "relation") config?.stringOrNull("data_source_id") ?: config?.stringOrNull("database_id") else null,
                 numberFormat = if (type == "number") config?.stringOrNull("format") else null,
                 defaultOption = if (type == "status") config?.stringOrNull("default_option") else null,
+                groups = if (type == "status") config?.arrayOrNull("groups")?.mapNotNull { parseGroup(it.asObjectOrNull()) }.orEmpty() else emptyList(),
             )
         }
         // A data source's parent is its database.
@@ -74,6 +76,16 @@ object PropertyCodec {
         option ?: return null
         val name = option.stringOrNull("name") ?: return null
         return SelectOption(name = name, color = option.stringOrNull("color") ?: "default", id = option.stringOrNull("id"), group = option.stringOrNull("group"))
+    }
+
+    private fun parseGroup(group: JsonObject?): StatusGroup? {
+        group ?: return null
+        val name = group.stringOrNull("name") ?: return null
+        return StatusGroup(
+            name = name,
+            color = group.stringOrNull("color") ?: "default",
+            optionIds = group.arrayOrNull("option_ids")?.mapNotNull { it.contentOrNull() }.orEmpty(),
+        )
     }
 
     fun parsePage(page: JsonObject, databaseId: String): NoteSummary? {

@@ -119,6 +119,15 @@
         <item quantity="one">%d linked page</item>
         <item quantity="other">%d linked pages</item>
     </plurals>
+    <!-- Sections of a board or calendar view (logic/ViewSections.kt). -->
+    <string name="section_none">No %1$s</string>
+    <string name="day_tomorrow">Tomorrow</string>
+    <string name="day_yesterday">Yesterday</string>
+    <string name="section_no_date">No date</string>
+    <plurals name="section_notes">
+        <item quantity="one">%d note</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
     <string name="cards_title">Cards</string>
     <string name="cards_follow_notion">Follow Notion</string>
     <string name="cards_follow_notion_hint">Cards show the properties and header image of the Notion view you are in. Turn off to choose them yourself.</string>

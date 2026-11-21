@@ -269,6 +269,9 @@ app apart from their package (and `R` import) lines. Copy a change to the other 
   tab per data source. Under it (or under the app bar) a secondary scrollable tab row of the data source's Notion views, in Notion's order. The whole header (top app bar, tab rows, `surface`)
   scrolls away with the notes and comes back on the first scroll up (`QuickReturnHeader`); the
   status bar area stays. Notes in a database follow their Notion view's order: a long press opens a card's menu, it doesn't move the card.
+  A board (or grouped view) and a calendar or timeline show sections one below the other, not side by side: each header is a 48dp-high row spanning the grid
+  with a 12dp dot in the option's Notion colour (fill and a thin outline), the name in Title Small, the number of notes in Label Large `onSurfaceVariant`
+  and a chevron at the end (a tap folds the section away); a calendar's sections are days (Today, Tomorrow, then the full date) and it opens at today.
 - Search, a child page: a back arrow and the query field in the app bar, a row of filter chips
   (Pages, Databases and, with several workspaces, one per workspace; a tap again shows
   everything), then one list of rows, best matches first, without headers.

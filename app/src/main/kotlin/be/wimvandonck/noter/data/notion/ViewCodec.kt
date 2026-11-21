@@ -2,6 +2,7 @@ package be.wimvandonck.noter.data.notion
 
 import be.wimvandonck.noter.data.api.stringOrNull
 import be.wimvandonck.noter.data.model.NotionView
+import be.wimvandonck.noter.data.model.ViewGroupBy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -26,6 +27,30 @@ object ViewCodec {
             quickFilters = json["quick_filters"].orNull(),
             visibleProperties = visibleProperties(configuration?.get("properties")),
             cover = cover(configuration?.get("cover")),
+            groupBy = groupBy(configuration?.get("group_by")),
+            datePropertyId = configuration?.stringOrNull("date_property_id"),
+        )
+    }
+
+    /**
+     * A view's `group_by`: `{type, property_id, sort: {type}, hide_empty_groups}`, a status with
+     * `group_by` "group" or "option". Null when it has none.
+     */
+    private fun groupBy(element: JsonElement?): ViewGroupBy? {
+        val obj = element as? JsonObject ?: return null
+        val type = obj.stringOrNull("type") ?: return null
+        val property = obj.stringOrNull("property_id") ?: return null
+        val sort = when (val order = obj["sort"]) {
+            is JsonObject -> order.stringOrNull("type")
+            is JsonPrimitive -> order.contentOrNull
+            else -> null
+        }
+        return ViewGroupBy(
+            type = type,
+            propertyId = property,
+            by = obj.stringOrNull("group_by"),
+            sort = sort ?: "manual",
+            hideEmpty = (obj["hide_empty_groups"] as? JsonPrimitive)?.contentOrNull == "true",
         )
     }
 

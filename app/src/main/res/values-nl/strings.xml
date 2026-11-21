@@ -119,6 +119,15 @@
         <item quantity="one">%d gekoppelde pagina</item>
         <item quantity="other">%d gekoppelde pagina’s</item>
     </plurals>
+    <!-- Sections of a board or calendar view (logic/ViewSections.kt). -->
+    <string name="section_none">Geen %1$s</string>
+    <string name="day_tomorrow">Morgen</string>
+    <string name="day_yesterday">Gisteren</string>
+    <string name="section_no_date">Geen datum</string>
+    <plurals name="section_notes">
+        <item quantity="one">%d notitie</item>
+        <item quantity="other">%d notities</item>
+    </plurals>
     <string name="cards_title">Kaarten</string>
     <string name="cards_follow_notion">Volg Notion</string>
     <string name="cards_follow_notion_hint">Kaarten tonen de eigenschappen en de koptekstafbeelding van de Notion-weergave waarin je zit. Zet uit om ze zelf te kiezen.</string>

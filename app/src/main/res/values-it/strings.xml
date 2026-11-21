@@ -122,6 +122,16 @@
         <item quantity="many">%d pagine collegate</item>
         <item quantity="other">%d pagine collegate</item>
     </plurals>
+    <!-- Sections of a board or calendar view (logic/ViewSections.kt). -->
+    <string name="section_none">Senza %1$s</string>
+    <string name="day_tomorrow">Domani</string>
+    <string name="day_yesterday">Ieri</string>
+    <string name="section_no_date">Senza data</string>
+    <plurals name="section_notes">
+        <item quantity="one">%d nota</item>
+        <item quantity="many">%d note</item>
+        <item quantity="other">%d note</item>
+    </plurals>
     <string name="cards_title">Schede</string>
     <string name="cards_follow_notion">Segui Notion</string>
     <string name="cards_follow_notion_hint">Le schede mostrano le proprietà e l\'immagine di intestazione della vista Notion aperta. Disattiva per sceglierle tu.</string>

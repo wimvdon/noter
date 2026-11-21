@@ -5,6 +5,7 @@ import be.wimvandonck.noter.data.model.NoteProperty
 import be.wimvandonck.noter.data.model.NotionUser
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.model.SelectOption
+import be.wimvandonck.noter.data.model.StatusGroup
 import be.wimvandonck.noter.data.model.withoutHidden
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -119,7 +120,8 @@ class PropertyCodecTest {
             obj(
                 """{"id":"db","title":[{"plain_text":"Notes"}],"properties":{
                   "Name":{"id":"title","name":"Name","type":"title","title":{}},
-                  "Status":{"id":"s","name":"Status","type":"status","status":{"options":[{"id":"1","name":"Todo","color":"gray"}]}},
+                  "Status":{"id":"s","name":"Status","type":"status","status":{"options":[{"id":"1","name":"Todo","color":"gray"}],
+                    "groups":[{"id":"g1","name":"To-do","color":"gray","option_ids":["1"]},{"id":"g2","name":"Complete","color":"green","option_ids":[]}]}},
                   "Project":{"id":"p","name":"Project","type":"relation","relation":{"database_id":"other"}},
                   "Created":{"id":"c","name":"Created","type":"created_time","created_time":{}}}}""",
             ),
@@ -127,6 +129,10 @@ class PropertyCodecTest {
         assertEquals("Notes", schema.title)
         assertEquals("Name", schema.titleProperty)
         assertEquals(listOf("Todo"), schema.property("Status")!!.options.map { it.name })
+        assertEquals(
+            listOf(StatusGroup("To-do", "gray", listOf("1")), StatusGroup("Complete", "green", emptyList())),
+            schema.property("Status")!!.groups,
+        )
         assertEquals("other", schema.property("Project")!!.relationDatabaseId)
         assertEquals("Created", schema.properties.last().name)
         assertTrue(schema.property("Status")!!.isChipCandidate)

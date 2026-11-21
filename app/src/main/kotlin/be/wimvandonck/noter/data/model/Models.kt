@@ -207,6 +207,25 @@ data class NotionView(
     val visibleProperties: List<String>? = null,
     /** What the view shows as the header image of its cards (Notion's cover setting: page_cover, page_content, ...); null: none. */
     val cover: String? = null,
+    /** How the view groups its notes into sections (a board's columns, or a grouped table or list); null: not grouped. */
+    val groupBy: ViewGroupBy? = null,
+    /** A calendar or timeline: the property (by ID) of the date that places its notes; null: none. */
+    val datePropertyId: String? = null,
+)
+
+/** A view's `group_by`, as Notion has it in the view's configuration (see ViewSections). */
+@Serializable
+data class ViewGroupBy(
+    /** The kind of property grouped by: select, status, multi_select, checkbox, person, ... */
+    val type: String,
+    /** The property, by ID. */
+    val propertyId: String,
+    /** A status: by "group" (To-do, In progress, Complete) or by "option"; else null. */
+    val by: String? = null,
+    /** The order of the groups: manual (the property's order), ascending or descending. */
+    val sort: String = "manual",
+    /** Groups without notes are left out. */
+    val hideEmpty: Boolean = false,
 )
 
 /** What a database's cards show. */
@@ -340,6 +359,15 @@ data class FileRef(
     val url: String? = null,
 )
 
+/** A status property's group of options (To-do, In progress, Complete), in Notion's order. */
+@Serializable
+data class StatusGroup(
+    val name: String,
+    val color: String = "default",
+    /** The IDs of the options in it. */
+    val optionIds: List<String> = emptyList(),
+)
+
 /** One property of a database, as its schema describes it. */
 @Serializable
 data class PropertySchema(
@@ -351,6 +379,8 @@ data class PropertySchema(
     val numberFormat: String? = null,
     /** A status property's default option, by name (shown for a note without a status; null: none). */
     val defaultOption: String? = null,
+    /** A status property's groups, in Notion's order (empty for other kinds). */
+    val groups: List<StatusGroup> = emptyList(),
 ) {
     val isChipCandidate: Boolean get() = type in CHIP_TYPES
 
