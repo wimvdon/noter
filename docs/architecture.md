@@ -29,7 +29,7 @@ properties and content: the pages of databases and pages on their own.
     With several workspaces, one part per workspace (`Workspaces.group`), each folded away with a
     tap on its name (`ApiKeyStore.collapsed`, on this phone only); pinned databases say their
     workspace (`NotesRepository.recent`, `refreshRecent`: the search, newest first, read up to
-    2000 results per workspace with the notes in databases left out; then the newest 50 top-level
+    2000 results per workspace with the notes in databases left out (asked with `filter_properties=title`, so a page comes back with only its title; data sources keep their schema; a text search in Search keeps all properties of the notes it finds); then the newest 50 top-level
     pages are asked for what is right inside them (`logic/HomeLevels.kt`), and up to 50 subpages
     and databases the search didn't reach are added, so the second level is complete; paced for
     Notion's rate limit). A long press on a row there offers Hide (#108): after a confirmation

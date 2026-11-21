@@ -232,7 +232,7 @@ class NotesRepositoryTest {
             when {
                 sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list()
                 sent.path.startsWith("/data_sources/db") -> 200 to FakeNotion.database("db")
-                sent.path == "/search" -> 200 to FakeNotion.list(
+                sent.path.startsWith("/search") -> 200 to FakeNotion.list(
                     """{"object":"page","id":"top","parent":{"type":"workspace","workspace":true},
                         "properties":{"title":{"id":"title","type":"title","title":[]}}}""",
                     FakeNotion.page("row", "db", "A note"),
@@ -246,6 +246,10 @@ class NotesRepositoryTest {
         val items = repo.browse("")
         // Without a search, a database's notes are left out.
         assertEquals(listOf("top"), items.map { it.id })
+        assertEquals("/search?filter_properties=title", notion.requests.last { it.path.startsWith("/search") }.path)
+        // A search by words finds the notes too, with all their properties (the note opens from them).
+        repo.browse("note")
+        assertEquals("/search", notion.requests.last { it.path.startsWith("/search") }.path)
 
         val id = repo.openNote(items.single().note!!)
         assertEquals("top", repo.note(id).first()?.id)
@@ -511,7 +515,7 @@ class NotesRepositoryTest {
     fun `Home's databases and pages are kept on this phone`() = runBlocking {
         notion.respond = { sent ->
             when {
-                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list(
+                sent.method == "POST" && sent.path.startsWith("/search") -> 200 to FakeNotion.list(
                     """{"object":"data_source","id":"ds-1","title":[{"plain_text":"Tasks"}],"parent":{"type":"database_id","database_id":"db-1"},"last_edited_time":"2026-10-01T10:00:00.000Z"}""",
                     """{"object":"page","id":"p-1","parent":{"type":"workspace","workspace":true},"properties":{"title":{"id":"title","type":"title","title":[{"plain_text":"Journal"}]}}}""",
                     FakeNotion.page("row-1", "ds-1", "A note"),
@@ -526,6 +530,9 @@ class NotesRepositoryTest {
         // A database's notes aren't listed, only databases and pages.
         assertEquals(listOf("ds-1", "p-1"), repo.recent.value?.map { it.id })
         assertEquals("Tasks", repo.knownItem("ds1")?.title)
+        assertEquals("Journal", repo.recent.value?.last()?.title)
+        // Only the title of each page is asked for: the list is much smaller.
+        assertTrue(notion.requests.filter { it.path.startsWith("/search") }.all { it.path == "/search?filter_properties=title" })
 
         notion.respond = { 503 to "{}" }
         val again = repository(cache, newSettings())
@@ -943,7 +950,7 @@ class NotesRepositoryTest {
                 sent.path.startsWith("/data_sources/db/query") -> 200 to FakeNotion.list()
                 sent.path.startsWith("/data_sources/other/query") -> 200 to FakeNotion.list()
                 sent.path.startsWith("/data_sources/other") -> 200 to FakeNotion.database("other")
-                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list(
+                sent.method == "POST" && sent.path.startsWith("/search") -> 200 to FakeNotion.list(
                     """{"object":"page","id":"page-1","parent":{"type":"workspace","workspace":true},"properties":{"title":{"id":"title","type":"title","title":[{"plain_text":"List"}]}}}""",
                 )
                 sent.method == "POST" && sent.path == "/pages/page-1/move" -> 200 to "{}"
@@ -986,7 +993,7 @@ class NotesRepositoryTest {
     fun `a database moved to a page or the top is sent as its new parent, and Home's tree follows`() = runBlocking {
         notion.respond = { sent ->
             when {
-                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list(
+                sent.method == "POST" && sent.path.startsWith("/search") -> 200 to FakeNotion.list(
                     """{"object":"data_source","id":"ds-1","title":[{"plain_text":"Tasks"}],"parent":{"type":"database_id","database_id":"db-1"}}""",
                 )
                 sent.path == "/databases/db-1" && sent.method == "GET" ->

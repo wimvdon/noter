@@ -1136,7 +1136,7 @@ class NotesRepository(
                 .filter { it.stringOrNull("type") == "child_page" && madeSince(it) }
                 .mapNotNull { child -> child.stringOrNull("id")?.let { client.getPage(it) } }
                 .lastOrNull(::sameTitle)
-            else -> client.search(InlineMarkdown.stripped(note.title), limit = 20)
+            else -> client.search(InlineMarkdown.stripped(note.title), limit = 20, titleOnly = true)
                 .filter { it.stringOrNull("object") == "page" && it.objOrNull("parent")?.stringOrNull("type") == "workspace" && madeSince(it) }
                 .firstOrNull(::sameTitle)
         }
@@ -1486,10 +1486,11 @@ class NotesRepository(
 
     /**
      * Pages and databases shared with the integration, most recently edited first. Without a
-     * [query] a database's own pages (the notes) are left out; with one they are found too.
+     * [query] a database's own pages (the notes) are left out and a page needs only its title;
+     * with one they are found too, with all their properties (a note opens from them).
      */
     suspend fun browse(query: String): List<WorkspaceItem> = withContext(Dispatchers.IO) {
-        WorkspaceCodec.parseAll(client.search(query.trim(), BROWSE_LIMIT), includeNotes = query.isNotBlank(), pagesKey = PAGES)
+        WorkspaceCodec.parseAll(client.search(query.trim(), BROWSE_LIMIT, titleOnly = query.isBlank()), includeNotes = query.isNotBlank(), pagesKey = PAGES)
     }
 
     /**
@@ -1502,7 +1503,7 @@ class NotesRepository(
      */
     suspend fun refreshRecent() {
         val found = withContext(Dispatchers.IO) {
-            WorkspaceCodec.parseAll(client.search("", HOME_LIMIT, total = Int.MAX_VALUE), includeNotes = false, pagesKey = PAGES)
+            WorkspaceCodec.parseAll(client.search("", HOME_LIMIT, total = Int.MAX_VALUE, titleOnly = true), includeNotes = false, pagesKey = PAGES)
         }
         val items = groupByDatabase(withSubpages(found), ask = true)
         withContext(Dispatchers.IO) {
