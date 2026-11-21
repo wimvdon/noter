@@ -53,7 +53,6 @@ node --test worker/test/noter-sign-in.test.mjs
 | `data/sync/BlockMatchTest` | New blocks keep the IDs Notion gave them, and blocks Notion added without answering are recognised, so nothing is added twice |
 | `data/sync/OutboxTableRowTest` | Waiting table row edits: a newer edit of a row replaces the older one, renamed with a new note |
 | `logic/TableCellsTest` | Table cell editing: which tables are editable, only the edited cell changes, short rows filled up, waiting edits put on downloaded content, an old cached table still reads |
-| `data/sync/OutboxTest` | The queue of unsent changes (merging, renaming new notes) |
 | `data/sync/OutboxTest` | The queue of unsent changes (merging, renaming new notes; a restore after Undo: an unsent trash is taken back, one being sent gets a restore behind it) |
 | `data/sync/SyncPolicyTest` | When to refresh, and merging refreshed notes |
 | `data/sync/SaveTimingTest` | How soon edits are saved while typing (within Notion's rate limit) |
