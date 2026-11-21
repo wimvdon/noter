@@ -47,10 +47,9 @@ node --test worker/test/noter-sign-in.test.mjs
 | `logic/DocumentEditorTest` | Enter, Backspace, Markdown shortcuts (Notion's), dividers, code blocks, numbering; nesting (indent, outdent, Enter and Backspace in nested blocks, what may move) |
 | `data/notion/BlockCodecTest` | Reading and writing every editable block type; images, files, links and linked pages read-only; table rows with IDs, cells keep formatting and mentions and a row is written whole |
 | `data/model/NotionFilesTest`, `logic/ReadOnlyBlocksTest` | Expiring links to files Notion hosts; file names and links of read-only blocks |
-| `data/notion/PropertyCodecTest` | Reading and writing page properties; a status' default option and the group of each status option; Notion's buttons left out of schemas, pages and stored copies, button blocks hidden |
+| `data/notion/PropertyCodecTest` | Reading and writing page properties; a status' default option and the group of each status option; a status's groups; Notion's buttons left out of schemas, pages and stored copies, button blocks hidden |
 | `data/notion/InlineMarkdownTest` | Bold, italic, strikethrough, code and links ⇄ Notion rich text; user, page, date, template and emoji mentions and equations written back unchanged, colour and underline kept, link previews as links, code blocks unaffected |
 | `data/notion/InlineTokensTest` | Editing around mentions (typing before, after or inside one, deleting part of one removes it, two side by side), colours kept when their text changes, pasted marker characters dropped, splitting lines |
-| `data/notion/PropertyCodecTest` | Reading and writing page properties; a status's groups; Notion's buttons left out of schemas, pages and stored copies, button blocks hidden |
 | `data/sync/ContentDiffTest` | The block changes sent to Notion for an edit, also for nested blocks (new blocks in their parent, moved blocks added again) |
 | `data/sync/BlockMatchTest` | New blocks keep the IDs Notion gave them, and blocks Notion added without answering are recognised, so nothing is added twice |
 | `data/sync/OutboxTableRowTest` | Waiting table row edits: a newer edit of a row replaces the older one, renamed with a new note |
