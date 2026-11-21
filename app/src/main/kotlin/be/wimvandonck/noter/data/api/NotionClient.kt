@@ -254,17 +254,19 @@ class NotionClient(
      */
     /**
      * What [query] finds, newest first: at most [limit] per workspace and [total] together (Home
-     * keeps every workspace's, Search the newest).
+     * keeps every workspace's, Search the newest). With [titleOnly] a page comes back with just its
+     * title (`filter_properties=title`: a much smaller answer for a long list); a data source keeps
+     * its schema either way, Notion always sends that.
      */
-    suspend fun search(query: String, limit: Int, total: Int = limit): List<JsonObject> =
-        NotionRoutes.newestFirst(eachKey { key -> search(query, limit, key) }, total)
+    suspend fun search(query: String, limit: Int, total: Int = limit, titleOnly: Boolean = false): List<JsonObject> =
+        NotionRoutes.newestFirst(eachKey { key -> search(query, limit, key, titleOnly) }, total)
 
-    private suspend fun search(query: String, limit: Int, key: String): List<JsonObject> {
+    private suspend fun search(query: String, limit: Int, key: String, titleOnly: Boolean): List<JsonObject> {
         val results = mutableListOf<JsonObject>()
         var cursor: String? = null
         do {
             val data = call(
-                "POST", "/search",
+                "POST", if (titleOnly) "/search?filter_properties=title" else "/search",
                 buildMap {
                     if (query.isNotBlank()) put("query", query)
                     put("sort", mapOf("direction" to "descending", "timestamp" to "last_edited_time"))

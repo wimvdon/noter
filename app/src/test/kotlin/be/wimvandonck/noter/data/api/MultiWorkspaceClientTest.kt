@@ -37,9 +37,9 @@ class MultiWorkspaceClientTest {
     fun `search asks every workspace, and its results remember their workspace`() = runBlocking {
         FakeNotion { sent ->
             when {
-                sent.path == "/search" && sent.auth == "Bearer a" ->
+                sent.path.startsWith("/search") && sent.auth == "Bearer a" ->
                     200 to """{"object":"list","results":[{"object":"page","id":"x","last_edited_time":"2026-10-01T10:00:00.000Z"}],"has_more":false}"""
-                sent.path == "/search" ->
+                sent.path.startsWith("/search") ->
                     200 to """{"object":"list","results":[{"object":"page","id":"y","last_edited_time":"2026-10-02T10:00:00.000Z"}],"has_more":false}"""
                 else -> 200 to """{"object":"page","id":"y"}"""
             }

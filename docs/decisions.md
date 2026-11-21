@@ -2,6 +2,14 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Notion's search sends only titles for Home's list
+
+Since 2026-10-14 `POST /v1/search` takes `filter_properties` like a data source query. Home's
+refresh reads up to 2000 results per workspace and only needs titles, so `NotionClient.search` has
+`titleOnly` (`?filter_properties=title`), used by Home, Search without words and the look for a
+page that was just made. Search with words keeps all properties: the notes it finds open from
+those results. Data sources always come with their schema, so nothing there changes.
+
 ## 2026-11-21: Move to… for pages, notes and databases, sent at once
 
 A page's or database's ⋮ menu has "Move to…", a sheet that lists Home's databases and pages in the
