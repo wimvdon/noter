@@ -24,6 +24,9 @@
     <string name="section_others">Altre</string>
     <string name="action_new_note">Nuova nota</string>
     <string name="new_note_in">Nuova nota in</string>
+    <string name="template_new_from">Nuova da modello</string>
+    <string name="template_empty">Nota vuota</string>
+    <string name="template_default">Predefinito</string>
     <string name="action_reorder">Riordina</string>
     <string name="action_move_up">Sposta su</string>
     <string name="action_move_down">Sposta giù</string>

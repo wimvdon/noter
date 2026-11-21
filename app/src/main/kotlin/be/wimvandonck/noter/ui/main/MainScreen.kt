@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.FilterAltOff
 import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.PostAdd
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -148,6 +149,8 @@ fun MainScreen(
     val snackbar = remember { SnackbarHostState() }
     val resources = androidx.compose.ui.platform.LocalResources.current
     var choosingTarget by remember { mutableStateOf(false) }
+    // The data source whose "New from template" sheet is open.
+    var templateTarget by remember { mutableStateOf<String?>(null) }
     val notes = state.notes
 
     LaunchedEffect(viewModel) {
@@ -308,9 +311,16 @@ fun MainScreen(
                                     }
                                 }
                             },
+                            trailingContent = state.templates[target.databaseId.replace("-", "")]?.let { _ ->
+                                {
+                                    IconButton(onClick = { templateTarget = target.databaseId }) {
+                                        Icon(Icons.Rounded.PostAdd, contentDescription = stringResource(R.string.template_new_from))
+                                    }
+                                }
+                            },
                             modifier = Modifier.clickable {
                                 choosingTarget = false
-                                viewModel.createNote(target.databaseId, onOpenNote)
+                                viewModel.createNote(target.databaseId, onCreated = onOpenNote)
                             },
                         )
                     }
@@ -318,6 +328,20 @@ fun MainScreen(
                 Spacer(Modifier.padding(bottom = 24.dp))
             }
         }
+    }
+
+    val chosenTemplates = templateTarget?.let { state.templates[it.replace("-", "")] }
+    if (templateTarget != null && chosenTemplates != null) {
+        TemplateSheet(
+            templates = chosenTemplates,
+            onPick = { pick ->
+                val target = templateTarget
+                templateTarget = null
+                choosingTarget = false
+                if (target != null) viewModel.createNote(target, pick, onOpenNote)
+            },
+            onDismiss = { templateTarget = null },
+        )
     }
 
     // Something shared from another app (#63): where to save it.

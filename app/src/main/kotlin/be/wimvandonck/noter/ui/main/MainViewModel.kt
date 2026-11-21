@@ -16,6 +16,8 @@ import be.wimvandonck.noter.data.model.DatabaseInfo
 import be.wimvandonck.noter.data.model.DatabaseSetup
 import be.wimvandonck.noter.data.model.NoteSummary
 import be.wimvandonck.noter.data.model.PageIcon
+import be.wimvandonck.noter.data.model.PageTemplate
+import be.wimvandonck.noter.logic.TemplatePick
 import be.wimvandonck.noter.data.model.PinnedDatabase
 import be.wimvandonck.noter.data.model.PropertyLayout
 import be.wimvandonck.noter.data.model.WorkspaceItem
@@ -101,6 +103,8 @@ data class HomeUiState(
     val recentError: String? = null,
     /** Where + can put a new note or page, by workspace. */
     val targetGroups: List<TargetGroup> = emptyList(),
+    /** The page templates of the databases known here, by data source ID without dashes (only those with any). */
+    val templates: Map<String, List<PageTemplate>> = emptyMap(),
     /** There are tokens for more than one workspace: lists say which workspace things are in. */
     val severalWorkspaces: Boolean = false,
     /** [recent] by workspace (with several), each as a tree. */
@@ -264,6 +268,9 @@ class MainViewModel(
             recentError = error,
             targetGroups = NoteTargets.grouped(NoteTargets.of(settings.pinnedDatabases, recent, known), spaces, owners),
             severalWorkspaces = several,
+            templates = databases.mapNotNull { (key, db) ->
+                db.schema?.templates?.takeIf { it.isNotEmpty() }?.let { key.replace("-", "") to it }
+            }.toMap(),
             treeGroups = if (several) {
                 Workspaces.group(recent.orEmpty(), owners, spaces, SearchResults::idsOf).map { WorkspaceGroup(it.workspace, PageTree.build(it.items, hidden)) }
             } else {
@@ -365,8 +372,8 @@ class MainViewModel(
     fun saveOrder(ids: List<String>) = viewModelScope.launch { repository.saveOrder(AppSettings.HOME, ids) }
 
     /** Creates a note in data source [databaseId] and calls [onCreated] with its ID. */
-    fun createNote(databaseId: String, onCreated: (String) -> Unit) = viewModelScope.launch {
-        val id = repository.createNote(databaseId) ?: return@launch
+    fun createNote(databaseId: String, pick: TemplatePick = TemplatePick.Auto, onCreated: (String) -> Unit) = viewModelScope.launch {
+        val id = repository.createNote(databaseId, template = pick) ?: return@launch
         onCreated(id)
     }
 

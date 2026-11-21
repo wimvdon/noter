@@ -343,6 +343,14 @@ data class PropertySchema(
     }
 }
 
+/** One of a data source's page templates, as Notion lists them. */
+@Serializable
+data class PageTemplate(val id: String, val name: String, val isDefault: Boolean = false)
+
+/** The template a new note is made from, kept in the queue until it is sent ([id] null: the data source's default). */
+@Serializable
+data class NoteTemplate(val id: String? = null, val timezone: String? = null)
+
 @Serializable
 data class DatabaseSchema(
     val id: String,
@@ -350,6 +358,8 @@ data class DatabaseSchema(
     val properties: List<PropertySchema>,
     /** The database this data source is in (Notion's web links use the database, not the data source). */
     val databaseId: String? = null,
+    /** The page templates of the data source (kept with the schema, asked again with it). */
+    val templates: List<PageTemplate> = emptyList(),
 ) {
     val titleProperty: String? get() = properties.firstOrNull { it.type == "title" }?.name
 

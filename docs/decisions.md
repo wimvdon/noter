@@ -2,6 +2,18 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: New notes use the data source's page templates
+
+A new note in a database gets its default template, as in Notion (`template: default` with the
+phone's time zone on `POST /pages`); "New from template" (in +, and in a database's ⋮ menu) picks
+another one or an empty note. The templates are listed with the schema
+(`GET /data_sources/{id}/templates`, kept in `DatabaseSchema.templates`). Notion applies a template
+after it made the page and allows no `children` with it, so the note sends no content of its own,
+asks for its content and values after 3 s (and again after 10 s while it is empty), and lines
+typed before the template arrived wait and go in after the template's content. Notes shared to the
+app never use a template. Rejected: a templates screen in Settings (Notion is where they are made),
+merging typed lines into the template's content (they are appended: nothing doubles or gets lost).
+
 ## 2026-11-21: Mentions, equations and colours survive an edit
 
 Editing a line used to write its mentions and inline equations back as plain text, and drop its

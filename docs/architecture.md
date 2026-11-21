@@ -46,6 +46,19 @@ properties and content: the pages of databases and pages on their own.
     "Database · Data source". With several workspaces it has a part per workspace
     (`NoteTargets.grouped`; a tap on its name folds it away while the sheet is open), and a page at the top
     goes with that workspace's token (`PendingOp.CreatePage.workspace`). A new note opens at once.
+    A database with page templates (`DatabaseSchema.templates`, listed with the schema by `GET
+    /data_sources/{id}/templates`, so kept and refreshed with it) gives a new note its default
+    template, as in Notion; a button at the end of its row in + and "New from template" in a
+    database's ⋮ menu open a sheet (`ui/main/TemplateSheet.kt`) with "Empty note" and the
+    templates (`TemplatePick`, `logic/NoteTemplates.kt`). The choice is kept in the queued create
+    (`PendingOp.CreatePage.template`) and sent as `template` (`default` or `template_id`, with the
+    phone's time zone) with only the properties the user filled in, no empty title and no
+    content: Notion allows no `children` with a template and applies it a moment after making the
+    page. `NotesRepository.settleTemplate` then downloads the page's properties and content after
+    3 s, and again after 10 s while it is empty (`contentReplaced` tells an open note, which shows
+    it). Lines typed meanwhile are kept back (`settling`) and go in after the template's content
+    (`NoteTemplates.mergeTyped`), or alone when it never comes. When Notion refuses the template,
+    the note is made empty. Notes shared to the app use no template.
   Without a token the screen says "Connect to Notion" with "Open settings" (`DESIGN.md`, "Empty
   and setup states"). Back on Home leaves the app.
 - **Sharing to the app** (#63): `MainActivity` takes text shared from another app (Android's send

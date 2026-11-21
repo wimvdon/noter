@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PostAdd
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.Tune
@@ -94,6 +95,7 @@ fun DatabaseScreen(
     var menu by remember { mutableStateOf(false) }
     // Quick actions (#119): the list (⋮) and the one being made or changed. They run from a note.
     var quickActionsOpen by remember { mutableStateOf(false) }
+    var choosingTemplate by remember { mutableStateOf(false) }
     val editing by viewModel.editing.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // On top: a change that reached Notion meanwhile asks the view's notes again.
@@ -188,6 +190,16 @@ fun DatabaseScreen(
                                                 viewModel.openEdit()
                                             },
                                         )
+                                        if (content.hasKey && !content.sourceMissing && state.templates.isNotEmpty()) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.template_new_from)) },
+                                                leadingIcon = { Icon(Icons.Rounded.PostAdd, contentDescription = null) },
+                                                onClick = {
+                                                    menu = false
+                                                    choosingTemplate = true
+                                                },
+                                            )
+                                        }
                                         if (content.hasKey && !content.sourceMissing) {
                                             DropdownMenuItem(
                                                 text = { Text(stringResource(R.string.quick_actions)) },
@@ -252,7 +264,7 @@ fun DatabaseScreen(
         },
         floatingActionButton = {
             if (content.hasKey && !content.sourceMissing) {
-                FloatingActionButton(onClick = { viewModel.createNote(onOpenNote) }) {
+                FloatingActionButton(onClick = { viewModel.createNote(onCreated = onOpenNote) }) {
                     Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.action_new_note))
                 }
             }
@@ -304,4 +316,14 @@ fun DatabaseScreen(
         )
     }
     if (quickActionsOpen) QuickActionsFlow(viewModel, onDismiss = { quickActionsOpen = false })
+    if (choosingTemplate && state.templates.isNotEmpty()) {
+        TemplateSheet(
+            templates = state.templates,
+            onPick = { pick ->
+                choosingTemplate = false
+                viewModel.createNote(pick, onOpenNote)
+            },
+            onDismiss = { choosingTemplate = false },
+        )
+    }
 }
