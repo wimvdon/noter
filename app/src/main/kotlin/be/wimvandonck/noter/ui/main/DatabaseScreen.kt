@@ -286,6 +286,8 @@ fun DatabaseScreen(
         ViewSettingsSheet(
             cards = state.cards,
             properties = state.properties,
+            followNotion = state.followNotion,
+            onFollowNotion = viewModel::setFollowNotion,
             onCards = viewModel::editCards,
             onEditInNotion = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, state.notionUrl.toUri())) } },
             onDismiss = { settingsOpen = false },

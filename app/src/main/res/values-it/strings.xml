@@ -116,6 +116,8 @@
         <item quantity="other">%d pagine collegate</item>
     </plurals>
     <string name="cards_title">Schede</string>
+    <string name="cards_follow_notion">Segui Notion</string>
+    <string name="cards_follow_notion_hint">Le schede mostrano le proprietà e l\'immagine di intestazione della vista Notion aperta. Disattiva per sceglierle tu.</string>
     <string name="card_cover">Immagine di copertina</string>
     <string name="card_content">Inizio del contenuto</string>
     <string name="action_indent">Aumenta rientro (nel blocco sopra)</string>

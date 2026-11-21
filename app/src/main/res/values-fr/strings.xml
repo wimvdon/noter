@@ -116,6 +116,8 @@
         <item quantity="other">%d pages liées</item>
     </plurals>
     <string name="cards_title">Cartes</string>
+    <string name="cards_follow_notion">Suivre Notion</string>
+    <string name="cards_follow_notion_hint">Les cartes affichent les propriétés et l\'image d\'en-tête de la vue Notion ouverte. Désactivez pour les choisir vous-même.</string>
     <string name="card_cover">Image d’en-tête</string>
     <string name="card_content">Début du contenu</string>
     <string name="action_indent">Augmenter le retrait (dans le bloc au-dessus)</string>

@@ -17,6 +17,12 @@ data class DatabaseSetup(
     val quickFilters: List<String> = emptyList(),
     /** What the cards show (null: what the database's cards showed before, see PropertyLayouts.cards). */
     val cards: CardLayout? = null,
+    /**
+     * Whether the cards show what the Notion view shown does (its properties and header image).
+     * Null: they do, unless this phone has cards chosen for the database ([cards], or from before
+     * those were part of the setup); see PropertyLayouts.followsNotion.
+     */
+    val cardsFollowNotion: Boolean? = null,
     /** Quick actions (#119): named sets of property changes, run on a note from its page. */
     val quickActions: List<QuickAction> = emptyList(),
 )
@@ -193,6 +199,14 @@ data class NotionView(
     val sorts: JsonElement? = null,
     /** Quick filters by property: a condition each, empty while it has none. */
     val quickFilters: JsonElement? = null,
+    /**
+     * The properties the view shows, by ID or name, in its order (the ones it hides are left out;
+     * the title is part of it when the view lists it). Null: the view's configuration isn't known
+     * (a copy kept before it was read).
+     */
+    val visibleProperties: List<String>? = null,
+    /** What the view shows as the header image of its cards (Notion's cover setting: page_cover, page_content, ...); null: none. */
+    val cover: String? = null,
 )
 
 /** What a database's cards show. */

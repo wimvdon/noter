@@ -1,8 +1,10 @@
 package be.wimvandonck.noter.logic
 
 import be.wimvandonck.noter.data.model.CardLayout
+import be.wimvandonck.noter.data.model.DatabaseSchema
 import be.wimvandonck.noter.data.model.DatabaseSetup
 import be.wimvandonck.noter.data.model.NoteProperty
+import be.wimvandonck.noter.data.model.NotionView
 import be.wimvandonck.noter.data.model.PropertyLayout
 
 /**
@@ -16,21 +18,25 @@ object PropertyLayouts {
     /** A note's properties, split into the shown ones and the hidden ones, in the user's order. */
     data class Arranged(val shown: List<NoteProperty>, val hidden: List<NoteProperty>)
 
-    /** [names] in the user's order: the ordered ones first, then the rest as they come. */
-    fun ordered(names: List<String>, layout: PropertyLayout?): List<String> {
-        val order = layout?.order.orEmpty()
-        return order.filter { it in names } + names.filterNot { it in order }
+    /**
+     * [names] in the user's order: the ordered ones first, then the rest as they come. Until the
+     * user arranged them, [preferred] (the order of a Notion view) takes the place of their order.
+     */
+    fun ordered(names: List<String>, layout: PropertyLayout?, preferred: List<String> = emptyList()): List<String> {
+        val order = layout?.order.orEmpty().ifEmpty { preferred }
+        val first = order.filter { it in names }.distinct()
+        return first + names.filterNot { it in first }
     }
 
     /** [names] in the user's order, split into the shown ones and the hidden ones. */
-    fun sections(names: List<String>, layout: PropertyLayout?): Pair<List<String>, List<String>> {
+    fun sections(names: List<String>, layout: PropertyLayout?, preferred: List<String> = emptyList()): Pair<List<String>, List<String>> {
         val hidden = layout?.hidden.orEmpty().toSet()
-        return ordered(names, layout).partition { it !in hidden }
+        return ordered(names, layout, preferred).partition { it !in hidden }
     }
 
-    fun arrange(properties: List<NoteProperty>, layout: PropertyLayout?): Arranged {
+    fun arrange(properties: List<NoteProperty>, layout: PropertyLayout?, preferred: List<String> = emptyList()): Arranged {
         val byName = properties.filter { it.type != "title" }.associateBy { it.name }
-        val (shown, hidden) = sections(byName.keys.toList(), layout)
+        val (shown, hidden) = sections(byName.keys.toList(), layout, preferred)
         return Arranged(shown.mapNotNull { byName[it] }, hidden.mapNotNull { byName[it] })
     }
 
@@ -44,12 +50,29 @@ object PropertyLayouts {
         return if (name in shown) arranged(layout, shown - name, listOf(name) + hidden) else arranged(layout, shown + name, hidden - name)
     }
 
+    /** What a database's cards showed before cards were part of its setup ([layout]). */
+    private fun earlierCards(layout: PropertyLayout?): CardLayout =
+        CardLayout(layout?.coverOnCard == true, layout?.contentOnCard != false, layout?.onCard.orEmpty())
+
     /**
-     * What a database's cards show: its setup's choice ([setup]), else what its cards showed before
-     * cards were part of the setup ([layout]).
+     * True when a database's cards show what its Notion view shows: unless the user chose
+     * otherwise ([DatabaseSetup.cardsFollowNotion]), they do until cards were chosen for the
+     * database, now or in an earlier version (those keep their choice).
      */
-    fun cards(setup: DatabaseSetup?, layout: PropertyLayout?): CardLayout =
-        setup?.cards ?: CardLayout(layout?.coverOnCard == true, layout?.contentOnCard != false, layout?.onCard.orEmpty())
+    fun followsNotion(setup: DatabaseSetup?, layout: PropertyLayout?): Boolean =
+        setup?.cardsFollowNotion ?: (setup?.cards == null && earlierCards(layout) == CardLayout())
+
+    /**
+     * What a database's cards show: what its Notion [view] shows ([schema] names its properties)
+     * while they follow Notion and the view is known, else the setup's choice ([setup]), else what
+     * its cards showed before cards were part of the setup ([layout]). Notion's cards show the
+     * start of the content, as the cards here do by default.
+     */
+    fun cards(setup: DatabaseSetup?, layout: PropertyLayout?, view: NotionView? = null, schema: DatabaseSchema? = null): CardLayout {
+        val names = if (followsNotion(setup, layout)) NotionViews.propertyNames(view, schema) else null
+        if (names != null) return CardLayout(cover = NotionViews.showsCover(view), content = true, properties = names.take(MAX_ON_CARD))
+        return setup?.cards ?: earlierCards(layout)
+    }
 
     /** Puts [name] on the card or takes it off; nothing changes when the card already has [MAX_ON_CARD]. */
     fun toggleOnCard(cards: CardLayout, name: String): CardLayout = when {
@@ -59,9 +82,14 @@ object PropertyLayouts {
     }
 
     /** Each database's layout with what its cards show filled in from its setup, for the lists of notes. */
-    fun cardLayouts(layouts: Map<String, PropertyLayout>, setups: Map<String, DatabaseSetup>): Map<String, PropertyLayout> =
-        (layouts.keys + setups.keys).associateWith { source ->
-            val cards = cards(setups[source], layouts[source])
+    fun cardLayouts(
+        layouts: Map<String, PropertyLayout>,
+        setups: Map<String, DatabaseSetup>,
+        views: Map<String, NotionView> = emptyMap(),
+        schemas: Map<String, DatabaseSchema> = emptyMap(),
+    ): Map<String, PropertyLayout> =
+        (layouts.keys + setups.keys + views.keys).associateWith { source ->
+            val cards = cards(setups[source], layouts[source], views[source], schemas[source])
             (layouts[source] ?: PropertyLayout()).copy(coverOnCard = cards.cover, contentOnCard = cards.content, onCard = cards.properties)
         }
 

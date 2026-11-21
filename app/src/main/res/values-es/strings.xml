@@ -116,6 +116,8 @@
         <item quantity="other">%d páginas enlazadas</item>
     </plurals>
     <string name="cards_title">Tarjetas</string>
+    <string name="cards_follow_notion">Seguir Notion</string>
+    <string name="cards_follow_notion_hint">Las tarjetas muestran las propiedades y la imagen de cabecera de la vista de Notion abierta. Desactívalo para elegirlas tú.</string>
     <string name="card_cover">Imagen de cabecera</string>
     <string name="card_content">Inicio del contenido</string>
     <string name="action_indent">Aumentar sangría (dentro del bloque de arriba)</string>

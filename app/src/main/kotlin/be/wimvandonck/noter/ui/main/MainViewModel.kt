@@ -26,6 +26,7 @@ import be.wimvandonck.noter.logic.NoteSearch
 import be.wimvandonck.noter.logic.NoteTargets
 import be.wimvandonck.noter.logic.HiddenOnHome
 import be.wimvandonck.noter.logic.PageTree
+import be.wimvandonck.noter.logic.NotionViews
 import be.wimvandonck.noter.logic.PropertyLayouts
 import be.wimvandonck.noter.logic.SearchKind
 import be.wimvandonck.noter.logic.SearchResults
@@ -43,6 +44,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -227,11 +229,11 @@ class MainViewModel(
 
     val state: StateFlow<HomeUiState> = combine(
         repository.settingsFlow(),
-        repository.databases,
+        combine(repository.databases, repository.views, ::Pair),
         combine(repository.recent, recentError, infos, ::Triple),
         status,
         workspaceInfo,
-    ) { settings, databases, (recent, error, known), (pending, offline, key, avatar, pull), (spaces, owners, folded, opened, limit) ->
+    ) { settings, (databases, viewCaches), (recent, error, known), (pending, offline, key, avatar, pull), (spaces, owners, folded, opened, limit) ->
         val pinned = NoteLists.pinned(databases.values.flatMap { it.notes }, settings.pinned, settings.order[AppSettings.HOME].orEmpty())
         val several = spaces.size > 1
         val hidden = HiddenOnHome.ids(settings.hiddenOnHome)
@@ -243,7 +245,12 @@ class MainViewModel(
                 pinned = pinned,
                 pinnedIds = settings.pinned.toSet(),
                 sourceIcons = sourceIcons(settings.pinnedDatabases, recent, known),
-                propertyLayouts = PropertyLayouts.cardLayouts(settings.propertyLayouts, settings.setups),
+                propertyLayouts = PropertyLayouts.cardLayouts(
+                    settings.propertyLayouts,
+                    settings.setups,
+                    NotionViews.shownViews(viewCaches.mapValues { it.value.views }, settings.views),
+                    databases.mapNotNull { (id, db) -> db.schema?.let { id to it } }.toMap(),
+                ),
                 refreshing = pull || databases.values.any { it.refreshing },
                 pendingCount = pending,
                 offline = offline,
@@ -278,6 +285,13 @@ class MainViewModel(
         // Home's list, at start and once a token is saved.
         viewModelScope.launch {
             hasKey.filter { it }.collect { refreshRecent() }
+        }
+        // The Notion views of the databases with pinned notes, for their cards (what each view shows).
+        viewModelScope.launch {
+            combine(repository.settingsFlow(), repository.databases) { settings, databases ->
+                val pinned = settings.pinned.toSet()
+                databases.filterValues { db -> db.notes.any { it.id in pinned } }.keys
+            }.distinctUntilChanged().collect { ids -> ids.forEach { launch { repository.openViews(it) } } }
         }
         // What is kept about the pinned databases (a database of several data sources offers each to +).
         viewModelScope.launch {

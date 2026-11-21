@@ -73,4 +73,45 @@ class NotionViewsTest {
         val created = mapOf("a" to "2026-11-01T10:00:00.000Z", "new" to "2026-11-12T10:00:05.000Z", "old" to "2026-11-01T09:00:00.000Z")
         assertEquals(listOf("new", "a"), NotionViews.members(listOf("a"), "2026-11-12T10:00:00Z", created))
     }
+
+    private val configured = DatabaseSchema(
+        "ds-1", "Tasks",
+        listOf(
+            PropertySchema("title", "Name", "title"),
+            PropertySchema("p1", "Status", "status"),
+            PropertySchema("p2", "Due", "date"),
+            PropertySchema("p3", "Owner", "people"),
+        ),
+    )
+
+    private fun shown(id: String, type: String = "table", properties: List<String>? = null, cover: String? = null, source: String = "ds-1") =
+        NotionView(id, "View $id", type, source, visibleProperties = properties, cover = cover)
+
+    @Test
+    fun `a view's property names follow its order, without the title and what the source no longer has`() {
+        val view = shown("1", properties = listOf("title", "p3", "Gone", "p1", "Due"))
+        assertEquals(listOf("Owner", "Status", "Due"), NotionViews.propertyNames(view, configured))
+        assertNull(NotionViews.propertyNames(shown("2"), configured))
+        assertNull(NotionViews.propertyNames(view, null))
+        assertNull(NotionViews.propertyNames(null, configured))
+    }
+
+    @Test
+    fun `a note follows the table view's order, else the first view that has one`() {
+        val board = shown("1", "board", listOf("p1"))
+        val table = shown("2", "table", listOf("p2"))
+        val unknown = shown("3", "table")
+        assertEquals("2", NotionViews.orderingView(listOf(board, table), "ds-1")?.id)
+        assertEquals("1", NotionViews.orderingView(listOf(unknown, board), "ds-1")?.id)
+        assertNull(NotionViews.orderingView(listOf(unknown, shown("4", "form", listOf("p1")), shown("5", source = "ds-2", properties = listOf("p1"))), "ds-1"))
+    }
+
+    @Test
+    fun `each source shows the view chosen last, else its first`() {
+        val views = mapOf("ds-1" to listOf(shown("a"), shown("b")), "ds-2" to listOf(shown("c", source = "ds-2")), "ds-3" to emptyList())
+        val result = NotionViews.shownViews(views, mapOf("ds-1" to "b"))
+        assertEquals("b", result["ds-1"]?.id)
+        assertEquals("c", result["ds-2"]?.id)
+        assertNull(result["ds-3"])
+    }
 }
