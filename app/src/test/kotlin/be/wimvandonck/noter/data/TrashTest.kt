@@ -201,7 +201,7 @@ class TrashTest {
                     """{"type":"database_id","database_id":"db"}""",
                     """{"type":"workspace","workspace":true}""",
                 )
-                sent.method == "POST" && sent.path == "/search" -> 200 to FakeNotion.list()
+                sent.method == "POST" && sent.path.startsWith("/search") -> 200 to FakeNotion.list()
                 else -> null
             }
         })
@@ -209,11 +209,11 @@ class TrashTest {
 
         repo.restoreFromTrash(TrashedPage("t9", "Loose"))
         repeat(50) {
-            if (notion.requests.any { it.method == "POST" && it.path == "/search" }) return@repeat
+            if (notion.requests.any { it.method == "POST" && it.path.startsWith("/search") }) return@repeat
             kotlinx.coroutines.delay(100)
         }
 
-        assertTrue(notion.requests.any { it.method == "POST" && it.path == "/search" })
+        assertTrue(notion.requests.any { it.method == "POST" && it.path.startsWith("/search") })
         assertTrue(patches().single().body.contains("\"in_trash\":false"))
     }
 
