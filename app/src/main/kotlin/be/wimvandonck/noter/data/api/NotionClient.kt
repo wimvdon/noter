@@ -99,10 +99,12 @@ class NotionClient(
         body: Any? = null,
         key: String? = null,
         adds: Boolean = false,
+        /** The object the request is about when the endpoint doesn't say (a comment's page). */
+        about: String? = null,
     ): JsonObject {
         if (key != null) return send(method, endpoint, body, key, adds).also { remember(it, key) }
         val all = keys()
-        val subject = NotionRoutes.subjectId(endpoint, body)
+        val subject = about ?: NotionRoutes.subjectId(endpoint, body)
         if (all.size <= 1 || subject == null) {
             val only = all.firstOrNull().orEmpty()
             return send(method, endpoint, body, only, adds).also { data ->
@@ -512,6 +514,25 @@ class NotionClient(
 
     suspend fun deleteBlock(blockId: String) {
         call("DELETE", "/blocks/$blockId")
+    }
+
+    /** The unresolved comments of page [pageId] (all pages of them). Needs the connection's "Read comments" capability. */
+    suspend fun comments(pageId: String): List<JsonObject> =
+        paged { cursor ->
+            call("GET", "/comments?block_id=$pageId&page_size=100" + (cursor?.let { "&start_cursor=$it" } ?: ""), about = pageId)
+        }
+
+    /** Adds a comment (see CommentCodec.addBody) on page [pageId]; needs "Insert comments". */
+    suspend fun addComment(pageId: String, body: Map<String, Any?>): JsonObject =
+        call("POST", "/comments", body, adds = true, about = pageId)
+
+    /** Changes a comment of the integration's own. */
+    suspend fun updateComment(pageId: String, commentId: String, body: Map<String, Any?>): JsonObject =
+        call("PATCH", "/comments/$commentId", body, about = pageId)
+
+    /** Deletes a comment of the integration's own. */
+    suspend fun deleteComment(pageId: String, commentId: String) {
+        call("DELETE", "/comments/$commentId", about = pageId)
     }
 
     /** The people of every workspace (each person once). */

@@ -89,4 +89,11 @@ class NotionRoutesTest {
         val b = obj("""{"id":"b","last_edited_time":"2026-10-01T10:00:00.000Z"}""")
         assertEquals(listOf(a, b), NotionRoutes.newestFirst(listOf(listOf(a, b), listOf(same))))
     }
+
+    @Test
+    fun `comments aren't remembered as pages or blocks of a workspace`() {
+        val list = obj("""{"object":"list","results":[{"object":"comment","id":"c1"}]}""")
+        assertTrue(NotionRoutes.objectIds(list).isEmpty())
+        assertTrue(NotionRoutes.objectIds(list, blocks = true).isEmpty())
+    }
 }

@@ -238,12 +238,30 @@ properties and content: the pages of databases and pages on their own.
   `data/api/SignInClient.kt`), one refresh at a time because Notion replaces the refresh token
   each time. The workspace keeps its `Workspaces.id` (stored as `WorkspaceToken.id`), so what is
   known about where pages are stays. Pasted tokens never go to the helper.
+- **Comments** (`ui/note/CommentsSheet.kt`, `NoteViewModel` `CommentsUi`, `logic/CommentThreads.kt`,
+  `data/notion/CommentCodec.kt`): the speech-bubble icon in a note's app bar (with a count badge
+  once comments are known) opens a `NoterSheet` with the page's discussions (`GET /comments?block_id=<page>`,
+  all pages of the list; page-level discussions first, a block discussion with a one-line quote of its
+  block when that block is loaded), each comment with author (the cached users, else Notion's
+  `display_name`), relative time and inline Markdown text. A field at the bottom adds a page comment
+  (`POST /comments` with `parent.page_id`) or, after Reply, a reply (`discussion_id` only; Notion wants
+  exactly one target). Edit (`PATCH /comments/{id}`) and Delete (asks first, `DELETE`) show on comments
+  whose `created_by` is the token's own `GET /users/me` id (`TokenInfo.id`), the only ones Notion lets an
+  integration change; comments with a mention or equation can't be edited here. Text goes as `rich_text`
+  from `InlineMarkdown`. Online only: read when the sheet opens (and once, quietly, when the note
+  opens, for the badge), kept in memory by `NotesRepository` while the app runs, nothing queued; errors
+  show next to the field. A 403 (`NotionErrors.ofComments`) says Notion doesn't let Noter read comments
+  for this workspace yet.
+  **Owner step:** a connection needs the *Read comments* and *Insert comments* capabilities. For the public
+  connection behind Connect to Notion, the owner turns them on in Notion's developer portal
+  (notion.so/profile/integrations › the connection › Capabilities), then people sign in again so their
+  token has them; a connection token made by a member has them in the same place.
 - **Which data source** (`NotesRepository.resolveSource`): a key is asked about as a database first
   (its first data source), then as a data source, because Notion may answer for a database's ID
   as if it were a data source. The answers are kept in `sources_v2.json`.
 - **Errors** (`data/api/NotionErrors.kt`, `ui/common/ErrorText.kt`): the screens keep an error as
   a key for the common cases (no connection, not found or not shared, Notion busy, token refused,
-  no data source), said in the user's language; other errors keep Notion's own (English) message.
+  no data source, comments not allowed), said in the user's language; other errors keep Notion's own (English) message.
 - **Token kind** (`data/notion/TokenCodec.kt`): Notion's `GET /users/me` says whether the token
   is a personal access token (a bot owned by a person) or an internal connection's (owned by the
   workspace). It is kept with the token (`ApiKeyStore.kind`) and asked again at each start, together with the profile picture of the person

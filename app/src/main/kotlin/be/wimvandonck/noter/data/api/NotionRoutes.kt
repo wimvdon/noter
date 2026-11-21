@@ -33,7 +33,7 @@ object NotionRoutes {
     fun objectIds(data: JsonObject, blocks: Boolean = false): List<String> = buildList {
         fun take(obj: JsonObject) {
             val kind = obj.stringOrNull("object")
-            val wanted = if (blocks) kind == "block" else kind != "block" && kind != "user"
+            val wanted = if (blocks) kind == "block" else kind != "block" && kind != "user" && kind != "comment"
             if (wanted) obj.stringOrNull("id")?.let(::add)
         }
         take(data)

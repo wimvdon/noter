@@ -27,6 +27,8 @@ data class TokenInfo(
     val avatarUrl: String? = null,
     /** Notion's ID of the workspace ("" when Notion doesn't say): the same for every token of it. */
     val workspaceId: String = "",
+    /** The token's own user ID (its bot): comments it wrote have it as their author. */
+    val id: String = "",
 )
 
 /** Notion's answer to "who am I" (`GET /users/me`) ⇄ [TokenInfo]. */
@@ -41,13 +43,14 @@ object TokenCodec {
         val workspace = bot?.stringOrNull("workspace_name")
         val workspaceId = bot?.stringOrNull("workspace_id").orEmpty()
         val botName = me.stringOrNull("name").orEmpty()
+        val id = me.stringOrNull("id").orEmpty()
         return if (owner?.stringOrNull("type") == "user") {
             val ownerUser = owner.objOrNull("user")
             val user = PropertyCodec.parseUser(ownerUser)
             val avatar = ownerUser?.stringOrNull("avatar_url")?.ifBlank { null }
-            TokenInfo(TokenKind.PERSONAL, user?.name?.ifBlank { null } ?: botName, user, workspace, avatar, workspaceId)
+            TokenInfo(TokenKind.PERSONAL, user?.name?.ifBlank { null } ?: botName, user, workspace, avatar, workspaceId, id)
         } else {
-            TokenInfo(TokenKind.CONNECTION, botName, workspace = workspace, workspaceId = workspaceId)
+            TokenInfo(TokenKind.CONNECTION, botName, workspace = workspace, workspaceId = workspaceId, id = id)
         }
     }
 }

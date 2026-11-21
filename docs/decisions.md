@@ -2,6 +2,19 @@
 
 Newest first. Add an entry for every notable choice: what was decided, why, and what was rejected.
 
+## 2026-11-21: Comments in a note, online only
+
+A note's app bar has a comments icon: a sheet with the page's discussions, a field to add a comment,
+Reply, and Edit and Delete on the token's own comments (`GET`/`POST /comments`, `PATCH`/`DELETE
+/comments/{id}`). Comments are read when the sheet opens (and once when the note opens, for the badge),
+kept in memory while the app runs and never queued: an offline send shows its error next to the
+field. Rejected: syncing comments into the cache and outbox (a comment sent late, in a conversation that
+moved on, is worse than an error) and fetching each block's comments (a request per block would break
+Notion's rate limit; block discussions appear only when Notion returns them for the page). Own comments
+are told by `created_by` equal to `GET /users/me`'s id, the only ones Notion lets an integration change.
+The public connection needs the Read and Insert comments capabilities, set by the owner in Notion's
+developer portal; a 403 says so in plain words.
+
 ## 2026-11-21: Table cells can be edited
 
 Tapping a cell of a table opens a small dialog with its text; Save sends the row to Notion

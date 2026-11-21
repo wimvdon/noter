@@ -15,7 +15,7 @@ class TokenCodecTest {
             """{"object":"user","id":"bot-1","type":"bot","name":"Noter",
                "bot":{"owner":{"type":"user","user":{"object":"user","id":"u1","name":"Wim","type":"person"}},"workspace_name":"Home"}}""",
         )
-        assertEquals(TokenInfo(TokenKind.PERSONAL, "Wim", NotionUser("u1", "Wim"), "Home"), info)
+        assertEquals(TokenInfo(TokenKind.PERSONAL, "Wim", NotionUser("u1", "Wim"), "Home", id = "bot-1"), info)
     }
 
     @Test
@@ -47,7 +47,7 @@ class TokenCodecTest {
             """{"object":"user","id":"bot-2","type":"bot","name":"Noter integration",
                "bot":{"owner":{"type":"workspace","workspace":true},"workspace_name":"Home"}}""",
         )
-        assertEquals(TokenInfo(TokenKind.CONNECTION, "Noter integration", workspace = "Home"), info)
+        assertEquals(TokenInfo(TokenKind.CONNECTION, "Noter integration", workspace = "Home", id = "bot-2"), info)
     }
 
     @Test

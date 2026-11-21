@@ -12,6 +12,9 @@ object NotionErrors {
     const val KEY_REJECTED = "error:key_rejected"
     const val NO_DATA_SOURCE = "error:no_data_source"
 
+    /** The connection may not read or add comments (its capabilities in Notion's developer portal). */
+    const val COMMENTS_FORBIDDEN = "error:comments_forbidden"
+
     /** "Connect to Notion" didn't work (Notion refused it, or what came back couldn't be read). */
     const val SIGN_IN_FAILED = "error:sign_in"
 
@@ -23,4 +26,7 @@ object NotionErrors {
         e.isTemporary -> BUSY
         else -> e.message.orEmpty()
     }
+
+    /** [of] for a comments call: a 403 means the connection lacks the comments capability. */
+    fun ofComments(e: NotionException): String = if (e.status == 403) COMMENTS_FORBIDDEN else of(e)
 }

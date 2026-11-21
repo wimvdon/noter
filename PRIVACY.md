@@ -16,6 +16,9 @@ crash reporting.
   title), and writes the changes you make (titles, properties, note content, moving a note to
   Notion's trash, and taking a page out of it again: Undo after trashing, or Settings › Trash,
   which lists what Notion's trash holds for 30 days).
+  When you open a note's comments (and quietly when you open a note, to count them),
+  it reads that page's comments from Notion, and it writes, changes or deletes a comment only when you
+  send, edit or delete one. Comments stay in Notion; the phone keeps them in memory only while the app runs.
 - **Noter's sign-in helper**, only when you use **Connect to Notion** (OAuth) instead of pasting a
   token. Notion requires a secret for that sign-in that can't be kept inside an app, so a small
   helper run by the developer on Cloudflare Workers (`noter.wim.to`) adds it. When you allow access in Notion,
