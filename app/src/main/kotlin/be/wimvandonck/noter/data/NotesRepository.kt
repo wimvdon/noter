@@ -62,6 +62,9 @@ import be.wimvandonck.noter.data.store.ViewResult
 import be.wimvandonck.noter.data.store.ViewsCache
 import be.wimvandonck.noter.data.notion.ViewCodec
 import be.wimvandonck.noter.logic.NotionViews
+import be.wimvandonck.noter.logic.NewViewType
+import be.wimvandonck.noter.logic.ViewEdits
+import be.wimvandonck.noter.data.model.NotionView
 import be.wimvandonck.noter.data.sync.BlockMatch
 import be.wimvandonck.noter.data.sync.BlockRef
 import be.wimvandonck.noter.data.sync.ContentDiff
@@ -1777,6 +1780,39 @@ class NotesRepository(
             val key = s.views.keys.firstOrNull { plain(it) == plain(sourceId) } ?: sourceId
             s.copy(views = s.views + (key to viewId))
         }
+    }
+
+    /**
+     * Adds a Notion view named [name] of [type] on data source [sourceId] (online only: Notion makes
+     * it at once). It shows here right away; returns its ID.
+     */
+    suspend fun createView(sourceId: String, name: String, type: NewViewType): String {
+        val database = databaseOf(sourceId) ?: throw NotionException("Database not known")
+        return withContext(Dispatchers.IO) {
+            val created = client.createView(ViewEdits.createBody(database, sourceId, name, type))
+            val id = created.stringOrNull("id") ?: throw NotionException("Notion did not return a view", status = 500)
+            // Notion may answer with part of the view: what was asked fills in the rest.
+            val parsed = ViewCodec.parse(created) ?: NotionView(id)
+            val view = parsed.copy(
+                name = parsed.name.ifBlank { name.trim() },
+                type = parsed.type.ifBlank { type.type },
+                dataSourceId = parsed.dataSourceId ?: sourceId,
+            )
+            setViews(sourceId) { it.copy(views = ViewEdits.added(it.views, view)) }
+            id
+        }
+    }
+
+    /** Renames Notion view [viewId] of data source [sourceId] to [name]; the new name shows here once Notion took it. */
+    suspend fun renameView(sourceId: String, viewId: String, name: String) = withContext(Dispatchers.IO) {
+        client.updateView(viewId, ViewEdits.renameBody(name))
+        setViews(sourceId) { it.copy(views = ViewEdits.renamed(it.views, viewId, name)) }
+    }
+
+    /** Deletes Notion view [viewId] of data source [sourceId] (in Notion, for everyone); gone here once Notion did. */
+    suspend fun deleteView(sourceId: String, viewId: String) = withContext(Dispatchers.IO) {
+        client.deleteView(viewId)
+        setViews(sourceId) { it.copy(views = ViewEdits.without(it.views, viewId), results = it.results - viewId) }
     }
 
     // ---- Browse -------------------------------------------------------------------------

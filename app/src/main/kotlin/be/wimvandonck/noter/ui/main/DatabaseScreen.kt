@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
@@ -67,6 +68,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalResources
 import be.wimvandonck.noter.ui.common.MoveSheet
 import be.wimvandonck.noter.ui.common.TrashUndoEffect
+import be.wimvandonck.noter.logic.ViewEdits
 import be.wimvandonck.noter.ui.common.PageIconView
 import be.wimvandonck.noter.ui.common.movedName
 import kotlinx.coroutines.launch
@@ -82,8 +84,10 @@ import be.wimvandonck.noter.ui.common.shareLink
  * A database, opened from Home, Search or a link in a note: its notes as its Notion views show
  * them, one tab each, with the view settings (Tune) at the start of the tabs: the tabs' order, the
  * hidden ones and what the cards show. The top app bar has a ⋮ menu (pin on Home, edit database,
- * quick actions, open in Notion, share). Everything changed here is kept at once; there is nothing
- * to save. A database of several data sources has a tab per data source, each with its own views.
+ * quick actions, new view, open in Notion, share). A tap on the tab of the view shown opens its
+ * menu (rename, delete, new view, its filters and sorts in Notion). Everything changed here is kept
+ * at once; there is nothing to save. A database of several data sources has a tab per data source,
+ * each with its own views.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,6 +110,10 @@ fun DatabaseScreen(
     val editing by viewModel.editing.collectAsStateWithLifecycle()
     val customEmojis by viewModel.customEmojis.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val openInNotion: (String) -> Unit = { url -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) } }
+    // The menu of the view shown, and the dialog that changes a view.
+    var viewMenu by remember { mutableStateOf(false) }
+    val viewEdit by viewModel.viewEdit.collectAsStateWithLifecycle()
     // On top: a change that reached Notion meanwhile asks the view's notes again.
     LifecycleResumeEffect(viewModel) {
         viewModel.setVisible(true)
@@ -226,6 +234,14 @@ fun DatabaseScreen(
                                                     quickActionsOpen = true
                                                 },
                                             )
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.new_view)) },
+                                                leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                                                onClick = {
+                                                    menu = false
+                                                    viewModel.openNewView()
+                                                },
+                                            )
                                         }
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.action_open_in_notion)) },
@@ -267,10 +283,33 @@ fun DatabaseScreen(
                                 edgePadding = 16.dp,
                             ) {
                                 state.views.forEach { view ->
+                                    val selected = view.id == state.viewId
+                                    // The view shown has a menu (a tap on its tab again): rename, delete, new view.
+                                    val manages = selected && content.hasKey
                                     Tab(
-                                        selected = view.id == state.viewId,
-                                        onClick = { viewModel.selectView(view.id) },
-                                        text = { Text(view.name.ifBlank { untitled }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                        selected = selected,
+                                        onClick = { if (manages) viewMenu = true else viewModel.selectView(view.id) },
+                                        text = {
+                                            Box {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(view.name.ifBlank { untitled }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    if (manages) {
+                                                        Icon(Icons.Rounded.ArrowDropDown, contentDescription = stringResource(R.string.view_options))
+                                                    }
+                                                }
+                                                if (manages) {
+                                                    ViewMenu(
+                                                        expanded = viewMenu,
+                                                        canDelete = ViewEdits.canDelete(state.views),
+                                                        onRename = { viewModel.openRenameView(view) },
+                                                        onDelete = { viewModel.openDeleteView(view) },
+                                                        onOpenInNotion = { openInNotion(ViewEdits.notionUrl(state.notionUrl, view.id)) },
+                                                        onNewView = viewModel::openNewView,
+                                                        onDismiss = { viewMenu = false },
+                                                    )
+                                                }
+                                            }
+                                        },
                                     )
                                 }
                             }
@@ -362,6 +401,15 @@ fun DatabaseScreen(
                 viewModel.createNote(pick, onOpenNote)
             },
             onDismiss = { choosingTemplate = false },
+        )
+    }
+    viewEdit?.let { edit ->
+        ViewEditDialog(
+            state = edit,
+            onCreate = viewModel::createView,
+            onRename = viewModel::renameView,
+            onDelete = viewModel::deleteView,
+            onDismiss = viewModel::dismissViewEdit,
         )
     }
 }

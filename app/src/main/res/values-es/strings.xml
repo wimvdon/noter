@@ -305,6 +305,18 @@
     <string name="view_settings">Ajustes de vistas</string>
     <string name="edit_views_in_notion">Editar vistas en Notion</string>
     <string name="more_in_notion">Más opciones en Notion</string>
+    <!-- Managing a database's Notion views -->
+    <string name="view_options">Opciones de la vista</string>
+    <string name="new_view">Nueva vista</string>
+    <string name="view_name">Nombre de la vista</string>
+    <string name="view_type_table">Tabla</string>
+    <string name="view_type_list">Lista</string>
+    <string name="new_view_hint">Los filtros, el orden y la agrupación se configuran en Notion.</string>
+    <string name="rename_view">Cambiar nombre de la vista</string>
+    <string name="delete_view_title">¿Eliminar «%1$s»?</string>
+    <string name="delete_view_body">La vista se elimina en Notion, para todos. Sus notas se quedan.</string>
+    <string name="delete_view_confirm">Eliminar</string>
+    <string name="view_filters_in_notion">Filtros y orden en Notion</string>
     <string name="add_image">Añadir imagen</string>
     <string name="add_file">Añadir archivo</string>
     <string name="uploading">Subiendo…</string>

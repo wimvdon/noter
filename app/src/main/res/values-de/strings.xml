@@ -300,6 +300,18 @@
     <string name="view_settings">Ansichtseinstellungen</string>
     <string name="edit_views_in_notion">Ansichten in Notion bearbeiten</string>
     <string name="more_in_notion">Weitere Optionen in Notion</string>
+    <!-- Managing a database's Notion views -->
+    <string name="view_options">Ansichtsoptionen</string>
+    <string name="new_view">Neue Ansicht</string>
+    <string name="view_name">Name der Ansicht</string>
+    <string name="view_type_table">Tabelle</string>
+    <string name="view_type_list">Liste</string>
+    <string name="new_view_hint">Filter, Sortierung und Gruppierung legst du in Notion fest.</string>
+    <string name="rename_view">Ansicht umbenennen</string>
+    <string name="delete_view_title">„%1$s“ löschen?</string>
+    <string name="delete_view_body">Die Ansicht wird in Notion gelöscht, für alle. Ihre Notizen bleiben.</string>
+    <string name="delete_view_confirm">Löschen</string>
+    <string name="view_filters_in_notion">Filter und Sortierung in Notion</string>
     <string name="add_image">Bild hinzufügen</string>
     <string name="add_file">Datei hinzufügen</string>
     <string name="uploading">Wird hochgeladen…</string>

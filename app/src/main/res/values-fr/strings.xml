@@ -305,6 +305,18 @@
     <string name="view_settings">Réglages des vues</string>
     <string name="edit_views_in_notion">Modifier les vues dans Notion</string>
     <string name="more_in_notion">Plus d’options dans Notion</string>
+    <!-- Managing a database's Notion views -->
+    <string name="view_options">Options de la vue</string>
+    <string name="new_view">Nouvelle vue</string>
+    <string name="view_name">Nom de la vue</string>
+    <string name="view_type_table">Tableau</string>
+    <string name="view_type_list">Liste</string>
+    <string name="new_view_hint">Les filtres, les tris et les regroupements se règlent dans Notion.</string>
+    <string name="rename_view">Renommer la vue</string>
+    <string name="delete_view_title">Supprimer « %1$s » ?</string>
+    <string name="delete_view_body">La vue est supprimée dans Notion, pour tout le monde. Ses notes restent.</string>
+    <string name="delete_view_confirm">Supprimer</string>
+    <string name="view_filters_in_notion">Filtres et tris dans Notion</string>
     <string name="add_image">Ajouter une image</string>
     <string name="add_file">Ajouter un fichier</string>
     <string name="uploading">Envoi…</string>

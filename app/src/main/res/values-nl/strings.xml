@@ -300,6 +300,18 @@
     <string name="view_settings">Weergave-instellingen</string>
     <string name="edit_views_in_notion">Weergaven bewerken in Notion</string>
     <string name="more_in_notion">Meer opties in Notion</string>
+    <!-- Managing a database's Notion views -->
+    <string name="view_options">Weergaveopties</string>
+    <string name="new_view">Nieuwe weergave</string>
+    <string name="view_name">Naam van de weergave</string>
+    <string name="view_type_table">Tabel</string>
+    <string name="view_type_list">Lijst</string>
+    <string name="new_view_hint">Filters, sorteren en groeperen stel je in Notion in.</string>
+    <string name="rename_view">Naam van weergave wijzigen</string>
+    <string name="delete_view_title">“%1$s” verwijderen?</string>
+    <string name="delete_view_body">De weergave wordt in Notion verwijderd, voor iedereen. De notities blijven.</string>
+    <string name="delete_view_confirm">Verwijderen</string>
+    <string name="view_filters_in_notion">Filters en sorteren in Notion</string>
     <string name="add_image">Afbeelding toevoegen</string>
     <string name="add_file">Bestand toevoegen</string>
     <string name="uploading">Uploaden…</string>

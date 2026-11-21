@@ -357,6 +357,17 @@ class NotionClient(
     /** A view: its name, type, filter, sorts and quick filters. */
     suspend fun getView(viewId: String): JsonObject = call("GET", "/views/$viewId")
 
+    /** Adds a view ([body], see ViewEdits.createBody). Notion answers with the new view. */
+    suspend fun createView(body: Map<String, Any?>): JsonObject = call("POST", "/views", body, adds = true)
+
+    /** Changes view [viewId] ([body], see ViewEdits.renameBody). */
+    suspend fun updateView(viewId: String, body: Map<String, Any?>): JsonObject = call("PATCH", "/views/$viewId", body)
+
+    /** Deletes view [viewId] in Notion (Notion refuses a database's last view). */
+    suspend fun deleteView(viewId: String) {
+        call("DELETE", "/views/$viewId")
+    }
+
     suspend fun getPage(pageId: String): JsonObject = call("GET", "/pages/$pageId")
 
     suspend fun createPage(
