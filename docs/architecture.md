@@ -116,6 +116,13 @@ properties and content: the pages of databases and pages on their own.
   own. `POST /databases` makes it with its first data source; it opens at once, with a toast saying
   that its views are edited in Notion. Unlike notes it isn't queued: it needs Notion, and the dialog
   shows the error when Notion can't be reached or refuses.
+- **Edit database options** (`ui/main/EditOptions.kt`, `logic/SchemaEdits.kt`): a select, multi-select
+  or status property opens its options in Edit database. Save sends `properties.<id>.<type>.options`
+  in the same `PATCH /data_sources` (existing options as `{id, name, color}`, a status option's
+  `group` only when it changed, new ones as `{name, color, group}`; an option left out is removed;
+  blank and repeated names are dropped). The API doesn't rename existing options, so that stays in
+  Notion. A status' read-only `default_option` is parsed into `PropertySchema.defaultOption` and
+  `logic/StatusDefaults.kt` shows it for an empty status on cards and in the note (display only).
 - **Search** (`SearchScreen.kt`, a child page from Home's search bar, sharing Home's ViewModel): one
   list (#60) of the notes on this phone whose title has every word typed (`logic/NoteSearch.kt`,
   at once and offline) and the databases and pages Notion's search finds, each page once, best

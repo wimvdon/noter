@@ -201,7 +201,7 @@
     <string name="action_rename">Rinomina</string>
     <string name="edit_database">Modifica database</string>
     <string name="action_save">Salva</string>
-    <string name="edit_database_properties">Proprietà. Formati e viste si impostano in Notion.</string>
+    <string name="edit_database_properties">Proprietà e le loro opzioni. Formati e viste si impostano in Notion.</string>
     <string name="remove_properties_title">Rimuovere le proprietà?</string>
     <string name="remove_properties_body">%1$s e i loro valori su ogni pagina vengono eliminati in Notion.</string>
     <string name="remove_and_save">Rimuovi e salva</string>
@@ -291,4 +291,26 @@
     <string name="view_settings">Impostazioni viste</string>
     <string name="edit_views_in_notion">Modifica le viste in Notion</string>
     <string name="more_in_notion">Altre opzioni in Notion</string>
+    <string name="options_of">Opzioni di %1$s</string>
+    <string name="option_add">Aggiungi opzione</string>
+    <string name="option_name">Nome dell’opzione</string>
+    <string name="option_remove">Rimuovi l’opzione %1$s</string>
+    <string name="option_color">Colore di %1$s</string>
+    <string name="option_group">Gruppo</string>
+    <string name="option_group_todo">Da fare</string>
+    <string name="option_group_progress">In corso</string>
+    <string name="option_group_complete">Completato</string>
+    <string name="option_rename_hint">Per rinominare un’opzione, usa Notion.</string>
+    <string name="remove_options_title">Rimuovere le opzioni?</string>
+    <string name="remove_options_body">%1$s vengono eliminate in Notion. Le note che le hanno perdono quel valore.</string>
+    <string name="notion_color_default">Predefinito</string>
+    <string name="notion_color_gray">Grigio</string>
+    <string name="notion_color_brown">Marrone</string>
+    <string name="notion_color_orange">Arancione</string>
+    <string name="notion_color_yellow">Giallo</string>
+    <string name="notion_color_green">Verde</string>
+    <string name="notion_color_blue">Blu</string>
+    <string name="notion_color_purple">Viola</string>
+    <string name="notion_color_pink">Rosa</string>
+    <string name="notion_color_red">Rosso</string>
 </resources>

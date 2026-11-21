@@ -31,9 +31,10 @@ object PropertyCodec {
                 id = prop.stringOrNull("id").orEmpty(),
                 name = prop.stringOrNull("name") ?: name,
                 type = type,
-                options = config?.arrayOrNull("options")?.mapNotNull { parseOption(it.asObjectOrNull()) }.orEmpty(),
+                options = parseOptions(type, config),
                 relationDatabaseId = if (type == "relation") config?.stringOrNull("data_source_id") ?: config?.stringOrNull("database_id") else null,
                 numberFormat = if (type == "number") config?.stringOrNull("format") else null,
+                defaultOption = if (type == "status") config?.stringOrNull("default_option") else null,
             )
         }
         // A data source's parent is its database.
@@ -55,10 +56,24 @@ object PropertyCodec {
                 .thenBy { it.name.lowercase() },
         )
 
+    /** A property's options; a status option also gets the name of the group that lists it. */
+    internal fun parseOptions(type: String, config: JsonObject?): List<SelectOption> {
+        val options = config?.arrayOrNull("options")?.mapNotNull { parseOption(it.asObjectOrNull()) }.orEmpty()
+        if (type != "status") return options
+        val groupOf = buildMap {
+            config?.arrayOrNull("groups")?.forEach { element ->
+                val group = element.asObjectOrNull() ?: return@forEach
+                val name = group.stringOrNull("name") ?: return@forEach
+                group.arrayOrNull("option_ids")?.forEach { id -> id.contentOrNull()?.let { put(it, name) } }
+            }
+        }
+        return options.map { it.copy(group = it.group ?: it.id?.let(groupOf::get)) }
+    }
+
     private fun parseOption(option: JsonObject?): SelectOption? {
         option ?: return null
         val name = option.stringOrNull("name") ?: return null
-        return SelectOption(name = name, color = option.stringOrNull("color") ?: "default", id = option.stringOrNull("id"))
+        return SelectOption(name = name, color = option.stringOrNull("color") ?: "default", id = option.stringOrNull("id"), group = option.stringOrNull("group"))
     }
 
     fun parsePage(page: JsonObject, databaseId: String): NoteSummary? {

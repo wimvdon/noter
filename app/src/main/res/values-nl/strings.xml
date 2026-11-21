@@ -198,7 +198,7 @@
     <string name="action_rename">Naam wijzigen</string>
     <string name="edit_database">Database bewerken</string>
     <string name="action_save">Opslaan</string>
-    <string name="edit_database_properties">Eigenschappen. Notaties en weergaven stel je in Notion in.</string>
+    <string name="edit_database_properties">Eigenschappen en hun opties. Notaties en weergaven stel je in Notion in.</string>
     <string name="remove_properties_title">Eigenschappen verwijderen?</string>
     <string name="remove_properties_body">%1$s en hun waarden op elke pagina worden in Notion verwijderd.</string>
     <string name="remove_and_save">Verwijderen en opslaan</string>
@@ -287,4 +287,26 @@
     <string name="view_settings">Weergave-instellingen</string>
     <string name="edit_views_in_notion">Weergaven bewerken in Notion</string>
     <string name="more_in_notion">Meer opties in Notion</string>
+    <string name="options_of">Opties van %1$s</string>
+    <string name="option_add">Optie toevoegen</string>
+    <string name="option_name">Naam van de optie</string>
+    <string name="option_remove">Optie %1$s verwijderen</string>
+    <string name="option_color">Kleur van %1$s</string>
+    <string name="option_group">Groep</string>
+    <string name="option_group_todo">Te doen</string>
+    <string name="option_group_progress">Bezig</string>
+    <string name="option_group_complete">Voltooid</string>
+    <string name="option_rename_hint">Een optie hernoem je in Notion.</string>
+    <string name="remove_options_title">Opties verwijderen?</string>
+    <string name="remove_options_body">%1$s worden in Notion verwijderd. Notities die ze hebben, verliezen die waarde.</string>
+    <string name="notion_color_default">Standaard</string>
+    <string name="notion_color_gray">Grijs</string>
+    <string name="notion_color_brown">Bruin</string>
+    <string name="notion_color_orange">Oranje</string>
+    <string name="notion_color_yellow">Geel</string>
+    <string name="notion_color_green">Groen</string>
+    <string name="notion_color_blue">Blauw</string>
+    <string name="notion_color_purple">Paars</string>
+    <string name="notion_color_pink">Roze</string>
+    <string name="notion_color_red">Rood</string>
 </resources>

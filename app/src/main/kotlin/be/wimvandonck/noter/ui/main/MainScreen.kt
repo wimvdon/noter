@@ -106,6 +106,7 @@ import be.wimvandonck.noter.data.model.NoteSummary
 import be.wimvandonck.noter.data.model.PageIcon
 import be.wimvandonck.noter.data.model.PinnedDatabase
 import be.wimvandonck.noter.data.model.PropertyLayout
+import be.wimvandonck.noter.data.model.SelectOption
 import be.wimvandonck.noter.data.model.PropertyValue
 import be.wimvandonck.noter.data.model.WorkspaceItem
 import be.wimvandonck.noter.data.notion.InlineMarkdown
@@ -114,6 +115,7 @@ import be.wimvandonck.noter.logic.ChipFilter
 import be.wimvandonck.noter.logic.FilterChip as Chip
 import be.wimvandonck.noter.logic.NotionDates
 import be.wimvandonck.noter.logic.PropertyLayouts
+import be.wimvandonck.noter.logic.StatusDefaults
 import be.wimvandonck.noter.logic.SharedContent
 import be.wimvandonck.noter.logic.TargetGroup
 import be.wimvandonck.noter.logic.TreeNode
@@ -980,6 +982,7 @@ internal fun NoteGrid(
                         databaseIcon = state.sourceIcons[item.note.databaseId],
                         chipProperty = state.cardProperty,
                         layout = state.propertyLayouts[item.note.databaseId],
+                        statusDefaults = state.statusDefaults[item.note.databaseId].orEmpty(),
                         lifted = isDragging,
                         // The card's own click also ends a long press; that one opened the menu or moved the card.
                         onOpen = { if (draggingKey != key) onOpen(key) },
@@ -1054,6 +1057,7 @@ private fun NoteCard(
     databaseIcon: PageIcon?,
     chipProperty: String?,
     layout: PropertyLayout?,
+    statusDefaults: Map<String, SelectOption>,
     lifted: Boolean,
     onOpen: () -> Unit,
     menu: @Composable () -> Unit,
@@ -1110,7 +1114,7 @@ private fun NoteCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    NoteLabels(note, chipProperty, layout, showDatabaseIcon, databaseIcon)
+                    NoteLabels(note, chipProperty, layout, statusDefaults, showDatabaseIcon, databaseIcon)
                 }
             }
             menu()
@@ -1128,11 +1132,13 @@ private fun NoteLabels(
     note: NoteSummary,
     chipProperty: String?,
     layout: PropertyLayout?,
+    statusDefaults: Map<String, SelectOption>,
     showDatabaseIcon: Boolean,
     databaseIcon: PageIcon?,
 ) {
-    val chosen = remember(note.properties, layout) { PropertyLayouts.cardProperties(note.properties, layout).filterNot { it.isEmpty } }
-    val shown = chosen.ifEmpty { listOfNotNull(chipProperty?.let { note.property(it) }) }
+    val properties = remember(note.properties, statusDefaults) { StatusDefaults.shown(note.properties, statusDefaults) }
+    val chosen = remember(properties, layout) { PropertyLayouts.cardProperties(properties, layout).filterNot { it.isEmpty } }
+    val shown = chosen.ifEmpty { listOfNotNull(chipProperty?.let { name -> properties.firstOrNull { it.name == name } }) }
     val sourceIcon = databaseIcon?.takeIf { showDatabaseIcon }
     if (shown.all { it.isEmpty } && !note.isLocal && sourceIcon == null) return
     val locale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]

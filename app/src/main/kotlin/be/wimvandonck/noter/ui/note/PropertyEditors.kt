@@ -74,6 +74,7 @@ import be.wimvandonck.noter.data.notion.PropertyCodec
 import be.wimvandonck.noter.logic.ChoiceOrder
 import be.wimvandonck.noter.logic.NewOptions
 import be.wimvandonck.noter.logic.NotionDates
+import be.wimvandonck.noter.logic.StatusDefaults
 import be.wimvandonck.noter.ui.common.NoterSheet
 import be.wimvandonck.noter.ui.common.OptionChip
 import java.time.LocalTime
@@ -174,6 +175,7 @@ private fun PropertyEditor(
             title = property.name,
             // Notion makes a new select option when a note is saved with it; not a status option.
             canAdd = property.type == "select",
+            placeholder = StatusDefaults.option(schema),
         ) { set(PropertyValue.Select(it.firstOrNull())) }
         is PropertyValue.MultiSelect -> SelectEditor(
             selected = value.options,
@@ -280,11 +282,13 @@ private fun SelectEditor(
     multiple: Boolean,
     title: String,
     canAdd: Boolean,
+    /** What Notion shows while nothing is chosen (a status' default option); display only. */
+    placeholder: SelectOption? = null,
     onChange: (List<SelectOption>) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    ValueChips(empty = selected.isEmpty(), onClick = { open = true }) {
-        selected.forEach { OptionChip(it) }
+    ValueChips(empty = selected.isEmpty() && placeholder == null, onClick = { open = true }) {
+        if (selected.isEmpty() && placeholder != null) OptionChip(placeholder) else selected.forEach { OptionChip(it) }
     }
     fun toggle(item: SelectOption) {
         if (multiple) {

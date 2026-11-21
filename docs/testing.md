@@ -33,7 +33,8 @@ node --test worker/test/noter-sign-in.test.mjs
 | `logic/LauncherShortcutsTest` | Which pinned databases and notes become launcher shortcuts, in which order, and what a shortcut may open |
 | `logic/HomeLevelsTest` | Which pages are Home's top level, and which subpages and databases inside them the search missed |
 | `logic/DatabaseEditTest` | What a database's new name or icon sends to Notion, and which rows, pins and kept names change |
-| `logic/SchemaEditsTest` | Edit database's properties: what renaming, removing and adding sends to Notion (by ID, unique names, blank names), and how the kept filters, sort, cards and note layout follow |
+| `logic/SchemaEditsTest` | Edit database's properties: what renaming, removing and adding sends to Notion (by ID, unique names, blank names), what adding, removing, recolouring and regrouping options sends (existing ones by ID, new names unique, status groups), and how the kept filters, sort, cards and note layout follow |
+| `logic/StatusDefaultsTest` | A status' default option: found with its colour, shown for an empty status (display only), never for other types |
 | `logic/SubpageTitlesTest` | A page's subpage and database titles follow Notion, and only those blocks change |
 | `logic/WorkspaceWaysTest` | Which tokens Advanced offers, in which order, and which is chosen first |
 | `logic/SealedBoxTest`, `logic/SignInsTest` | Connect to Notion: opening what the sign-in helper sealed (a sample sealed by the helper itself), the state and authorize link, reading Notion's token answer |
@@ -43,9 +44,9 @@ node --test worker/test/noter-sign-in.test.mjs
 | `logic/DocumentEditorTest` | Enter, Backspace, Markdown shortcuts (Notion's), dividers, code blocks, numbering; nesting (indent, outdent, Enter and Backspace in nested blocks, what may move) |
 | `data/notion/BlockCodecTest` | Reading and writing every editable block type; images, files, links, tables and linked pages read-only |
 | `data/model/NotionFilesTest`, `logic/ReadOnlyBlocksTest` | Expiring links to files Notion hosts; file names and links of read-only blocks |
+| `data/notion/PropertyCodecTest` | Reading and writing page properties; a status' default option and the group of each status option; Notion's buttons left out of schemas, pages and stored copies, button blocks hidden |
 | `data/notion/InlineMarkdownTest` | Bold, italic, strikethrough, code and links ⇄ Notion rich text; user, page, date, template and emoji mentions and equations written back unchanged, colour and underline kept, link previews as links, code blocks unaffected |
 | `data/notion/InlineTokensTest` | Editing around mentions (typing before, after or inside one, deleting part of one removes it, two side by side), colours kept when their text changes, pasted marker characters dropped, splitting lines |
-| `data/notion/PropertyCodecTest` | Reading and writing page properties; Notion's buttons left out of schemas, pages and stored copies, button blocks hidden |
 | `data/sync/ContentDiffTest` | The block changes sent to Notion for an edit, also for nested blocks (new blocks in their parent, moved blocks added again) |
 | `data/sync/BlockMatchTest` | New blocks keep the IDs Notion gave them, and blocks Notion added without answering are recognised, so nothing is added twice |
 | `data/sync/OutboxTest` | The queue of unsent changes (merging, renaming new notes) |

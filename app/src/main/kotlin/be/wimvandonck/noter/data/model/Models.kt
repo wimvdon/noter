@@ -245,6 +245,8 @@ data class SelectOption(
     val name: String,
     val color: String = "default",
     val id: String? = null,
+    /** A status option's group ("To-do", "In progress", "Complete"); null for the other types. */
+    val group: String? = null,
 )
 
 /** A Notion user, for person properties. */
@@ -322,6 +324,8 @@ data class PropertySchema(
     val options: List<SelectOption> = emptyList(),
     val relationDatabaseId: String? = null,
     val numberFormat: String? = null,
+    /** A status property's default option, by name (shown for a note without a status; null: none). */
+    val defaultOption: String? = null,
 ) {
     val isChipCandidate: Boolean get() = type in CHIP_TYPES
 
